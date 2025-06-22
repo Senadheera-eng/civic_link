@@ -309,68 +309,9 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 24),
 
             // Test Account Info
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: SimpleTheme.accent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info, color: SimpleTheme.accent, size: 16),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Test Accounts',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: SimpleTheme.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _buildTestAccountRow(
-                    'Citizen',
-                    'test@citizen.com',
-                    'password123',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildTestAccountRow(
-                    'Admin',
-                    'test@admin.com',
-                    'password123',
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildTestAccountRow(String type, String email, String password) {
-    return Row(
-      children: [
-        StatusChip(
-          text: type,
-          color: type == 'Admin' ? SimpleTheme.warning : SimpleTheme.success,
-          icon: type == 'Admin' ? Icons.admin_panel_settings : Icons.person,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            '$email / $password',
-            style: const TextStyle(
-              fontSize: 12,
-              color: SimpleTheme.textSecondary,
-              fontFamily: 'monospace',
-            ),
-          ),
-        ),
-      ],
     );
   }
 
