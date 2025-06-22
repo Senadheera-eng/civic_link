@@ -29,8 +29,36 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _signOut() async {
-    await _authService.signOut();
-    Navigator.pushReplacementNamed(context, '/login');
+    try {
+      print("🔐 HomeScreen: Starting sign out process");
+
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      await _authService.signOut();
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      print("✅ HomeScreen: Sign out successful, navigating to login");
+      Navigator.pushReplacementNamed(context, '/login');
+    } catch (e) {
+      print("❌ HomeScreen: Sign out failed: $e");
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sign out failed: $e'),
+          backgroundColor: SimpleTheme.error,
+        ),
+      );
+    }
   }
 
   @override

@@ -33,24 +33,49 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await _authService.signInWithEmail(
+      print("🔐 LoginScreen: Starting sign in attempt");
+
+      // Check auth state before sign in
+      await _authService.checkAuthState();
+
+      final result = await _authService.signInWithEmail(
         _emailController.text,
         _passwordController.text,
       );
 
-      final userData = await _authService.getUserData();
-      if (userData != null) {
-        if (userData.isAdmin) {
-          Navigator.pushReplacementNamed(context, '/admin');
+      if (result != null) {
+        print("✅ LoginScreen: Sign in successful, getting user data");
+
+        // Small delay to ensure auth state is updated
+        await Future.delayed(Duration(milliseconds: 500));
+
+        final userData = await _authService.getUserData();
+        if (userData != null) {
+          print("✅ LoginScreen: User data retrieved, navigating");
+          if (userData.isAdmin) {
+            Navigator.pushReplacementNamed(context, '/admin');
+          } else {
+            Navigator.pushReplacementNamed(context, '/home');
+          }
         } else {
+          print("⚠️ LoginScreen: User data not found, going to home anyway");
           Navigator.pushReplacementNamed(context, '/home');
         }
       }
     } catch (e) {
+      print("❌ LoginScreen: Sign in failed with error: $e");
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(e.toString())),
+            ],
+          ),
           backgroundColor: SimpleTheme.error,
+          duration: const Duration(seconds: 5),
         ),
       );
     } finally {
