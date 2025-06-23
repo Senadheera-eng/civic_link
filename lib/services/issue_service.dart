@@ -1,0 +1,319 @@
+// services/issue_service.dart
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../models/issue_model.dart';
+
+class IssueService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  // Get current user
+  User? get currentUser => _auth.currentUser;
+
+  // Submit a new issue
+  Future<String> submitIssue({
+    required String title,
+    required String description,
+    required String category,
+    required String priority,
+    required List<XFile> images,
+    required double latitude,
+    required double longitude,
+    required String address,
+  }) async {
+    try {
+      print("📝 IssueService: Starting issue submission");
+
+      final user = currentUser;
+      if (user == null) {
+        throw 'User not authenticated';
+      }
+
+      // Upload images first
+      List<String> imageUrls = [];
+      if (images.isNotEmpty) {
+        print("📸 Uploading ${images.length} images...");
+        imageUrls = await _uploadImages(images);
+        print("✅ Images uploaded successfully");
+      }
+
+      // Create issue document
+      final issueData = IssueModel(
+        id: '', // Will be set by Firestore
+        title: title,
+        description: description,
+        category: category,
+        status: 'pending',
+        priority: priority,
+        userId: user.uid,
+        userEmail: user.email ?? '',
+        userName: user.displayName ?? 'Anonymous',
+        latitude: latitude,
+        longitude: longitude,
+        address: address,
+        imageUrls: imageUrls,
+        createdAt: DateTime.now(),
+      );
+
+      // Save to Firestore
+      DocumentReference docRef = await _firestore
+          .collection('issues')
+          .add(issueData.toFirestore());
+
+      print("✅ Issue submitted successfully with ID: ${docRef.id}");
+      return docRef.id;
+    } catch (e) {
+      print("❌ Error submitting issue: $e");
+      throw 'Failed to submit issue: $e';
+    }
+  }
+
+  // Upload images to Firebase Storage
+  Future<List<String>> _uploadImages(List<XFile> images) async {
+    List<String> urls = [];
+
+    for (int i = 0; i < images.length; i++) {
+      try {
+        print("📸 Uploading image ${i + 1}/${images.length}");
+
+        final file = File(images[i].path);
+        final fileName =
+            'issues/${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+
+        final ref = _storage.ref().child(fileName);
+        final uploadTask = ref.putFile(file);
+
+        final snapshot = await uploadTask;
+        final downloadUrl = await snapshot.ref.getDownloadURL();
+
+        urls.add(downloadUrl);
+        print("✅ Image ${i + 1} uploaded: $downloadUrl");
+      } catch (e) {
+        print("❌ Error uploading image ${i + 1}: $e");
+        throw 'Failed to upload image: $e';
+      }
+    }
+
+    return urls;
+  }
+
+  // Get current location
+  Future<Position> getCurrentLocation() async {
+    try {
+      print("📍 Getting current location...");
+
+      // Check location permission
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw 'Location services are disabled';
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw 'Location permission denied';
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw 'Location permissions are permanently denied';
+      }
+
+      // Get current position
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      print("✅ Location obtained: ${position.latitude}, ${position.longitude}");
+      return position;
+    } catch (e) {
+      print("❌ Error getting location: $e");
+      throw 'Failed to get location: $e';
+    }
+  }
+
+  // Get address from coordinates (simplified version)
+  Future<String> getAddressFromCoordinates(
+    double latitude,
+    double longitude,
+  ) async {
+    try {
+      // For now, return a formatted coordinate string
+      // In a real app, you'd use geocoding service
+      return "Lat: ${latitude.toStringAsFixed(6)}, Lng: ${longitude.toStringAsFixed(6)}";
+    } catch (e) {
+      print("❌ Error getting address: $e");
+      return "Location: ${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}";
+    }
+  }
+
+  // Pick image from camera
+  Future<XFile?> pickImageFromCamera() async {
+    try {
+      print("📸 Opening camera...");
+
+      // Check camera permission
+      final status = await Permission.camera.request();
+      if (!status.isGranted) {
+        throw 'Camera permission denied';
+      }
+
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        print("✅ Image captured: ${image.path}");
+      }
+
+      return image;
+    } catch (e) {
+      print("❌ Error picking image from camera: $e");
+      throw 'Failed to capture image: $e';
+    }
+  }
+
+  // Pick image from gallery
+  Future<XFile?> pickImageFromGallery() async {
+    try {
+      print("🖼️ Opening gallery...");
+
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        print("✅ Image selected: ${image.path}");
+      }
+
+      return image;
+    } catch (e) {
+      print("❌ Error picking image from gallery: $e");
+      throw 'Failed to select image: $e';
+    }
+  }
+
+  // Pick multiple images
+  Future<List<XFile>> pickMultipleImages() async {
+    try {
+      print("🖼️ Opening gallery for multiple selection...");
+
+      final images = await _imagePicker.pickMultiImage(
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 80,
+      );
+
+      print("✅ Selected ${images.length} images");
+      return images;
+    } catch (e) {
+      print("❌ Error picking multiple images: $e");
+      throw 'Failed to select images: $e';
+    }
+  }
+
+  // Get user's issues
+  Future<List<IssueModel>> getUserIssues() async {
+    try {
+      final user = currentUser;
+      if (user == null) {
+        throw 'User not authenticated';
+      }
+
+      print("📋 Getting issues for user: ${user.email}");
+
+      final querySnapshot =
+          await _firestore
+              .collection('issues')
+              .where('userId', isEqualTo: user.uid)
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      final issues =
+          querySnapshot.docs
+              .map((doc) => IssueModel.fromFirestore(doc))
+              .toList();
+
+      print("✅ Found ${issues.length} issues for user");
+      return issues;
+    } catch (e) {
+      print("❌ Error getting user issues: $e");
+      throw 'Failed to get issues: $e';
+    }
+  }
+
+  // Get all issues (for map view)
+  Future<List<IssueModel>> getAllIssues() async {
+    try {
+      print("🗺️ Getting all issues for map view");
+
+      final querySnapshot =
+          await _firestore
+              .collection('issues')
+              .orderBy('createdAt', descending: true)
+              .limit(100) // Limit for performance
+              .get();
+
+      final issues =
+          querySnapshot.docs
+              .map((doc) => IssueModel.fromFirestore(doc))
+              .toList();
+
+      print("✅ Found ${issues.length} total issues");
+      return issues;
+    } catch (e) {
+      print("❌ Error getting all issues: $e");
+      throw 'Failed to get issues: $e';
+    }
+  }
+
+  // Get issue by ID
+  Future<IssueModel?> getIssueById(String issueId) async {
+    try {
+      final doc = await _firestore.collection('issues').doc(issueId).get();
+
+      if (doc.exists) {
+        return IssueModel.fromFirestore(doc);
+      }
+
+      return null;
+    } catch (e) {
+      print("❌ Error getting issue by ID: $e");
+      return null;
+    }
+  }
+
+  // Stream of user's issues for real-time updates
+  Stream<List<IssueModel>> getUserIssuesStream() {
+    final user = currentUser;
+    if (user == null) {
+      return Stream.value([]);
+    }
+
+    return _firestore
+        .collection('issues')
+        .where('userId', isEqualTo: user.uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs
+                  .map((doc) => IssueModel.fromFirestore(doc))
+                  .toList(),
+        );
+  }
+}
