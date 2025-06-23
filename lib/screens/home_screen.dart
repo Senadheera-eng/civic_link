@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart';
 import '../theme/simple_theme.dart';
+import 'report_issue_screen.dart'; // Add this import
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -321,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: 'Report Issue',
               subtitle: 'Report problems',
               color: SimpleTheme.warning,
-              onTap: () => _showComingSoon('Report Issue'),
+              onTap: () => _navigateToReportIssue(),
             ),
             _buildActionCard(
               icon: Icons.track_changes,
@@ -515,5 +516,18 @@ class _HomeScreenState extends State<HomeScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
+  }
+
+  void _navigateToReportIssue() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ReportIssueScreen()),
+    );
+
+    // If issue was submitted successfully, refresh the home screen
+    if (result == true) {
+      // Optionally refresh data here
+      _loadUserData();
+    }
   }
 }
