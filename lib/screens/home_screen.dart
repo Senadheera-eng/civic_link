@@ -1,4 +1,5 @@
 // screens/home_screen.dart (SIMPLE COLORFUL VERSION)
+import 'package:civic_link/screens/my_issue_sreen.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart';
@@ -329,7 +330,14 @@ class _HomeScreenState extends State<HomeScreen> {
               title: 'Track Issues',
               subtitle: 'Monitor reports',
               color: SimpleTheme.accent,
-              onTap: () => _showComingSoon('Issue Tracking'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MyIssuesScreen(),
+                  ),
+                );
+              },
             ),
             _buildActionCard(
               icon: Icons.map,
