@@ -1,16 +1,14 @@
-// services/notification_service.dart
+// services/notification_service.dart (Android-Only Version)
 import 'dart:ui';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:io';
 
 // Background message handler - must be top-level function
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print('Handling background message: ${message.messageId}');
-  // You can process the message here if needed
 }
 
 class NotificationService {
@@ -24,88 +22,57 @@ class NotificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Initialize notifications
+  // Initialize notifications for Android
   Future<void> initialize() async {
-    print('🔔 Initializing Notification Service');
+    print('🔔 Initializing Notification Service for Android');
 
     // Request permissions
-    await _requestPermissions();
-
-    // Initialize local notifications
-    await _initializeLocalNotifications();
-
-    // Configure FCM
-    await _configureFCM();
-
-    // Get and save FCM token
-    await _getAndSaveToken();
-  }
-
-  // Request notification permissions
-  Future<void> _requestPermissions() async {
     final settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
-      provisional: false,
-      announcement: false,
-      carPlay: false,
-      criticalAlert: false,
     );
 
-    print('🔔 Permission status: ${settings.authorizationStatus}');
-  }
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('✅ User granted notification permissions');
+    } else {
+      print('❌ User declined notification permissions');
+    }
 
-  // Initialize local notifications plugin
-  Future<void> _initializeLocalNotifications() async {
-    // Android initialization
+    // Initialize local notifications
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
-
-    // iOS initialization
-    final iosSettings = DarwinInitializationSettings(
-      requestSoundPermission: true,
-      requestBadgePermission: true,
-      requestAlertPermission: true,
-      onDidReceiveLocalNotification: (id, title, body, payload) async {
-        // Handle iOS foreground notification
-      },
-    );
-
-    final initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
+    const initSettings = InitializationSettings(android: androidSettings);
 
     await _localNotifications.initialize(
       initSettings,
-      onDidReceiveNotificationResponse: (details) {
+      onDidReceiveNotificationResponse: (NotificationResponse details) {
         // Handle notification tap
-        _handleNotificationTap(details.payload);
+        if (details.payload != null) {
+          _handleNotificationTap(details.payload);
+        }
       },
     );
 
     // Create notification channel for Android
-    if (Platform.isAndroid) {
-      const channel = AndroidNotificationChannel(
-        'civic_link_channel',
-        'CivicLink Notifications',
-        description: 'Notifications for issue updates',
-        importance: Importance.high,
-      );
+    const channel = AndroidNotificationChannel(
+      'civic_link_channel',
+      'CivicLink Notifications',
+      description: 'Notifications for issue updates',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+    );
 
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.createNotificationChannel(channel);
-    }
-  }
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(channel);
 
-  // Configure FCM
-  Future<void> _configureFCM() async {
-    // Set foreground notification presentation options
+    // Set foreground notification options
     await _messaging.setForegroundNotificationPresentationOptions(
       alert: true,
       badge: true,
@@ -115,121 +82,127 @@ class NotificationService {
     // Background message handler
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // Foreground messages
+    // Listen to foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('🔔 Received foreground message: ${message.messageId}');
+      print('🔔 Received foreground message');
       _handleForegroundMessage(message);
       _saveNotificationToFirestore(message);
     });
 
-    // Message opened app
+    // Handle notification taps when app is in background
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('🔔 Message opened app: ${message.messageId}');
-      _handleNotificationTap(message.data['issueId']);
+      print('🔔 Notification opened app from background');
+      if (message.data['issueId'] != null) {
+        _handleNotificationTap(message.data['issueId']);
+      }
     });
 
-    // Check if app was opened from terminated state
+    // Check if app was opened from notification
     final initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) {
-      print('🔔 App opened from terminated state');
+    if (initialMessage != null && initialMessage.data['issueId'] != null) {
+      print('🔔 App opened from terminated state via notification');
       _handleNotificationTap(initialMessage.data['issueId']);
     }
+
+    // Get and save FCM token
+    await _saveToken();
+
+    // Listen for token refresh
+    _messaging.onTokenRefresh.listen(_updateToken);
   }
 
-  // Get and save FCM token
-  Future<void> _getAndSaveToken() async {
+  // Save FCM token to Firestore
+  Future<void> _saveToken() async {
     try {
       final token = await _messaging.getToken();
-      print('🔔 FCM Token: $token');
-
       if (token != null) {
+        print('🔔 FCM Token: $token');
+
         final user = _auth.currentUser;
         if (user != null) {
-          // Save token to user document
           await _firestore.collection('users').doc(user.uid).update({
             'fcmToken': token,
             'lastTokenUpdate': FieldValue.serverTimestamp(),
+            'platform': 'android',
           });
         }
       }
-
-      // Listen for token refresh
-      _messaging.onTokenRefresh.listen((newToken) async {
-        print('🔔 FCM Token refreshed: $newToken');
-        final user = _auth.currentUser;
-        if (user != null) {
-          await _firestore.collection('users').doc(user.uid).update({
-            'fcmToken': newToken,
-            'lastTokenUpdate': FieldValue.serverTimestamp(),
-          });
-        }
-      });
     } catch (e) {
-      print('❌ Error getting FCM token: $e');
+      print('❌ Error saving FCM token: $e');
+    }
+  }
+
+  // Update token on refresh
+  Future<void> _updateToken(String token) async {
+    print('🔔 FCM Token refreshed');
+    final user = _auth.currentUser;
+    if (user != null) {
+      await _firestore.collection('users').doc(user.uid).update({
+        'fcmToken': token,
+        'lastTokenUpdate': FieldValue.serverTimestamp(),
+      });
     }
   }
 
   // Handle foreground messages
   void _handleForegroundMessage(RemoteMessage message) {
     final notification = message.notification;
-    final data = message.data;
+    final android = message.notification?.android;
 
     if (notification != null) {
       _showLocalNotification(
+        id: message.hashCode,
         title: notification.title ?? 'CivicLink',
         body: notification.body ?? 'You have a new notification',
-        payload: data['issueId'],
+        payload: message.data['issueId'],
+        imageUrl: android?.imageUrl,
       );
     }
   }
 
   // Show local notification
   Future<void> _showLocalNotification({
+    required int id,
     required String title,
     required String body,
     String? payload,
+    String? imageUrl,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
+    // Android notification details
+    final androidDetails = AndroidNotificationDetails(
       'civic_link_channel',
       'CivicLink Notifications',
       channelDescription: 'Notifications for issue updates',
       importance: Importance.high,
       priority: Priority.high,
+      ticker: 'ticker',
       showWhen: true,
-      icon: '@mipmap/ic_launcher',
-      color: Color(0xFF2196F3),
+      enableVibration: true,
+      playSound: true,
+      styleInformation: BigTextStyleInformation(body),
+      // Add image if available
+      largeIcon: imageUrl != null ? FilePathAndroidBitmap(imageUrl) : null,
+      // Custom color
+      color: const Color(0xFF2196F3),
+      // Auto cancel when tapped
+      autoCancel: true,
     );
 
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
+    final details = NotificationDetails(android: androidDetails);
 
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title,
-      body,
-      details,
-      payload: payload,
-    );
+    await _localNotifications.show(id, title, body, details, payload: payload);
   }
 
   // Handle notification tap
   void _handleNotificationTap(String? issueId) {
     if (issueId != null) {
-      // Navigate to issue detail screen
+      // This will be handled by the app's navigation
       // You'll need to implement navigation from your main app
       print('🔔 Navigate to issue: $issueId');
     }
   }
 
-  // Save notification to Firestore for history
+  // Save notification to Firestore
   Future<void> _saveNotificationToFirestore(RemoteMessage message) async {
     try {
       final user = _auth.currentUser;
@@ -241,6 +214,7 @@ class NotificationService {
           'data': message.data,
           'read': false,
           'createdAt': FieldValue.serverTimestamp(),
+          'platform': 'android',
         });
       }
     } catch (e) {
@@ -248,7 +222,27 @@ class NotificationService {
     }
   }
 
-  // Get user notifications
+  // Subscribe to topic
+  Future<void> subscribeToTopic(String topic) async {
+    try {
+      await _messaging.subscribeToTopic(topic);
+      print('✅ Subscribed to topic: $topic');
+    } catch (e) {
+      print('❌ Error subscribing to topic: $e');
+    }
+  }
+
+  // Unsubscribe from topic
+  Future<void> unsubscribeFromTopic(String topic) async {
+    try {
+      await _messaging.unsubscribeFromTopic(topic);
+      print('✅ Unsubscribed from topic: $topic');
+    } catch (e) {
+      print('❌ Error unsubscribing from topic: $e');
+    }
+  }
+
+  // Get user notifications from Firestore
   Stream<List<NotificationModel>> getUserNotifications() {
     final user = _auth.currentUser;
     if (user == null) return Stream.value([]);
@@ -257,51 +251,13 @@ class NotificationService {
         .collection('notifications')
         .where('userId', isEqualTo: user.uid)
         .orderBy('createdAt', descending: true)
+        .limit(50) // Limit to last 50 notifications
         .snapshots()
         .map((snapshot) {
           return snapshot.docs
               .map((doc) => NotificationModel.fromFirestore(doc))
               .toList();
         });
-  }
-
-  // Mark notification as read
-  Future<void> markAsRead(String notificationId) async {
-    try {
-      await _firestore.collection('notifications').doc(notificationId).update({
-        'read': true,
-        'readAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      print('❌ Error marking notification as read: $e');
-    }
-  }
-
-  // Mark all notifications as read
-  Future<void> markAllAsRead() async {
-    try {
-      final user = _auth.currentUser;
-      if (user != null) {
-        final batch = _firestore.batch();
-        final unreadNotifications =
-            await _firestore
-                .collection('notifications')
-                .where('userId', isEqualTo: user.uid)
-                .where('read', isEqualTo: false)
-                .get();
-
-        for (final doc in unreadNotifications.docs) {
-          batch.update(doc.reference, {
-            'read': true,
-            'readAt': FieldValue.serverTimestamp(),
-          });
-        }
-
-        await batch.commit();
-      }
-    } catch (e) {
-      print('❌ Error marking all as read: $e');
-    }
   }
 
   // Get unread notification count
@@ -317,33 +273,59 @@ class NotificationService {
         .map((snapshot) => snapshot.docs.length);
   }
 
+  // Mark notification as read
+  Future<void> markAsRead(String notificationId) async {
+    await _firestore.collection('notifications').doc(notificationId).update({
+      'read': true,
+      'readAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // Mark all as read
+  Future<void> markAllAsRead() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final batch = _firestore.batch();
+    final unreadDocs =
+        await _firestore
+            .collection('notifications')
+            .where('userId', isEqualTo: user.uid)
+            .where('read', isEqualTo: false)
+            .get();
+
+    for (final doc in unreadDocs.docs) {
+      batch.update(doc.reference, {
+        'read': true,
+        'readAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+  }
+
   // Delete notification
   Future<void> deleteNotification(String notificationId) async {
-    try {
-      await _firestore.collection('notifications').doc(notificationId).delete();
-    } catch (e) {
-      print('❌ Error deleting notification: $e');
-    }
+    await _firestore.collection('notifications').doc(notificationId).delete();
   }
 
-  // Subscribe to topic (for group notifications)
-  Future<void> subscribeToTopic(String topic) async {
-    try {
-      await _messaging.subscribeToTopic(topic);
-      print('🔔 Subscribed to topic: $topic');
-    } catch (e) {
-      print('❌ Error subscribing to topic: $e');
-    }
-  }
+  // Clear all notifications
+  Future<void> clearAllNotifications() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
 
-  // Unsubscribe from topic
-  Future<void> unsubscribeFromTopic(String topic) async {
-    try {
-      await _messaging.unsubscribeFromTopic(topic);
-      print('🔔 Unsubscribed from topic: $topic');
-    } catch (e) {
-      print('❌ Error unsubscribing from topic: $e');
+    final batch = _firestore.batch();
+    final userNotifications =
+        await _firestore
+            .collection('notifications')
+            .where('userId', isEqualTo: user.uid)
+            .get();
+
+    for (final doc in userNotifications.docs) {
+      batch.delete(doc.reference);
     }
+
+    await batch.commit();
   }
 }
 
