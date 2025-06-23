@@ -1,4 +1,5 @@
 // screens/home_screen.dart (SIMPLE COLORFUL VERSION)
+import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
@@ -344,7 +345,14 @@ class _HomeScreenState extends State<HomeScreen> {
               title: 'Issue Map',
               subtitle: 'View nearby issues',
               color: SimpleTheme.success,
-              onTap: () => _showComingSoon('Issue Map'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const IssueMapScreen(),
+                  ),
+                );
+              },
             ),
             _buildActionCard(
               icon: Icons.notifications,
