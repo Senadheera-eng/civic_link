@@ -52,6 +52,7 @@ flutter {
 
 dependencies {
     implementation 'com.google.android.gms:play-services-auth:20.7.0'
+    implementation 'com.google.firebase:firebase-messaging:23.4.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22"
     implementation 'androidx.multidex:multidex:2.0.1'  // FIXED: multidx → multidex
     
