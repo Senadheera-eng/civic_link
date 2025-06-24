@@ -1,4 +1,4 @@
-// main.dart (UPDATED WITH SETTINGS ROUTE - COMPATIBLE)
+// main.dart (SIMPLE COLORFUL VERSION)
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -6,7 +6,6 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_dashboard.dart';
-import 'screens/settings_screen.dart'; // Add this import
 import 'services/auth_service.dart';
 import 'theme/simple_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart' show User;
@@ -40,7 +39,6 @@ class MyApp extends StatelessWidget {
         '/register': (context) => RegisterScreen(),
         '/home': (context) => HomeScreen(),
         '/admin': (context) => AdminDashboard(),
-        '/settings': (context) => SettingsScreen(), // Add this route
       },
     );
   }
