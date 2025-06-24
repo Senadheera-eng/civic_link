@@ -1,9 +1,9 @@
-// screens/issue_map_screen.dart
+// screens/issue_map_screen.dart (REDESIGNED WITH LOCATION FILTERING)
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/issue_service.dart';
 import '../models/issue_model.dart';
-import '../theme/simple_theme.dart';
+import '../theme/modern_theme.dart';
 import 'issue_detail_screen.dart';
 
 class IssueMapScreen extends StatefulWidget {
@@ -13,452 +13,964 @@ class IssueMapScreen extends StatefulWidget {
   State<IssueMapScreen> createState() => _IssueMapScreenState();
 }
 
-class _IssueMapScreenState extends State<IssueMapScreen> {
+class _IssueMapScreenState extends State<IssueMapScreen>
+    with TickerProviderStateMixin {
   final IssueService _issueService = IssueService();
-  GoogleMapController? _mapController;
-  Set<Marker> _markers = {};
-  List<IssueModel> _issues = [];
-  bool _isLoading = true;
-  String _selectedCategory = 'All';
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
 
-  // Default camera position (you can update this to user's location)
-  static const CameraPosition _initialPosition = CameraPosition(
-    target: LatLng(6.9271, 79.8612), // Colombo, Sri Lanka
-    zoom: 12,
-  );
+  List<IssueModel> _allIssues = [];
+  List<IssueModel> _nearbyIssues = [];
+  Position? _currentLocation;
+  bool _isLoading = true;
+  bool _isGettingLocation = false;
+
+  // Filters
+  String _selectedCategory = 'All';
+  double _radiusKm = 5.0; // Default 5km radius
+  String _selectedLocationFilter = 'nearby'; // 'nearby', 'city', 'all'
 
   @override
   void initState() {
     super.initState();
-    _loadIssues();
+    _initAnimations();
+    _loadData();
   }
 
-  Future<void> _loadIssues() async {
+  void _initAnimations() {
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+    _fadeController.forward();
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+
     try {
+      // Load user's current location
+      await _getCurrentLocation();
+
+      // Load all issues
       final issues = await _issueService.getAllIssues();
+
       setState(() {
-        _issues = issues;
-        _createMarkers();
+        _allIssues = issues;
         _isLoading = false;
       });
+
+      // Filter nearby issues
+      _filterNearbyIssues();
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading issues: $e'),
-            backgroundColor: SimpleTheme.error,
-          ),
-        );
+      _showErrorSnackBar('Error loading issues: $e');
+    }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isGettingLocation = true);
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Location services are disabled');
       }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permissions are denied');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Location permissions are permanently denied');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _currentLocation = position;
+        _isGettingLocation = false;
+      });
+    } catch (e) {
+      setState(() => _isGettingLocation = false);
+      _showErrorSnackBar('Location error: $e');
     }
   }
 
-  void _createMarkers() {
-    final filteredIssues =
-        _selectedCategory == 'All'
-            ? _issues
-            : _issues
-                .where((issue) => issue.category == _selectedCategory)
-                .toList();
+  void _filterNearbyIssues() {
+    if (_currentLocation == null) return;
 
-    _markers =
-        filteredIssues.map((issue) {
-          return Marker(
-            markerId: MarkerId(issue.id),
-            position: LatLng(issue.latitude, issue.longitude),
-            icon: _getMarkerIcon(issue.status, issue.priority),
-            infoWindow: InfoWindow(
-              title: issue.title,
-              snippet: '${issue.category} • ${_getStatusText(issue.status)}',
-              onTap: () => _showIssueDetails(issue),
-            ),
-            onTap: () => _showIssueBottomSheet(issue),
+    List<IssueModel> filteredIssues = [];
+
+    switch (_selectedLocationFilter) {
+      case 'nearby':
+        // Filter by radius
+        for (var issue in _allIssues) {
+          double distanceInMeters = Geolocator.distanceBetween(
+            _currentLocation!.latitude,
+            _currentLocation!.longitude,
+            issue.latitude,
+            issue.longitude,
           );
-        }).toSet();
-  }
 
-  BitmapDescriptor _getMarkerIcon(String status, String priority) {
-    // Color based on status
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return BitmapDescriptor.defaultMarkerWithHue(
-          BitmapDescriptor.hueOrange,
-        );
-      case 'in_progress':
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
-      case 'resolved':
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-      case 'rejected':
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-      default:
-        return BitmapDescriptor.defaultMarker;
+          if (distanceInMeters <= (_radiusKm * 1000)) {
+            filteredIssues.add(issue);
+          }
+        }
+        break;
+      case 'city':
+        // Filter by city (you can implement city detection logic)
+        filteredIssues =
+            _allIssues.where((issue) {
+              // Simple city filtering - you can improve this with reverse geocoding
+              double distanceInMeters = Geolocator.distanceBetween(
+                _currentLocation!.latitude,
+                _currentLocation!.longitude,
+                issue.latitude,
+                issue.longitude,
+              );
+              return distanceInMeters <= 20000; // 20km for city
+            }).toList();
+        break;
+      case 'all':
+        filteredIssues = _allIssues;
+        break;
     }
-  }
 
-  void _showIssueBottomSheet(IssueModel issue) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => _buildIssueBottomSheet(issue),
-    );
-  }
+    // Apply category filter
+    if (_selectedCategory != 'All') {
+      filteredIssues =
+          filteredIssues
+              .where((issue) => issue.category == _selectedCategory)
+              .toList();
+    }
 
-  Widget _buildIssueBottomSheet(IssueModel issue) {
-    final statusColor = _getStatusColor(issue.status);
-    final priorityColor = _getPriorityColor(issue.priority);
+    // Sort by distance (nearest first)
+    if (_currentLocation != null) {
+      filteredIssues.sort((a, b) {
+        double distanceA = Geolocator.distanceBetween(
+          _currentLocation!.latitude,
+          _currentLocation!.longitude,
+          a.latitude,
+          a.longitude,
+        );
+        double distanceB = Geolocator.distanceBetween(
+          _currentLocation!.latitude,
+          _currentLocation!.longitude,
+          b.latitude,
+          b.longitude,
+        );
+        return distanceA.compareTo(distanceB);
+      });
+    }
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Handle bar
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Title and Status
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  issue.title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              StatusChip(
-                text: _getStatusText(issue.status),
-                color: statusColor,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Category and Priority
-          Row(
-            children: [
-              Icon(
-                _getCategoryIcon(issue.category),
-                size: 16,
-                color: SimpleTheme.textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                issue.category,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: SimpleTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: priorityColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  issue.priority,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: priorityColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          // Description
-          Text(
-            issue.description,
-            style: const TextStyle(
-              fontSize: 14,
-              color: SimpleTheme.textSecondary,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          const SizedBox(height: 16),
-
-          // Location
-          Row(
-            children: [
-              const Icon(
-                Icons.location_on,
-                size: 16,
-                color: SimpleTheme.textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  issue.address,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: SimpleTheme.textSecondary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Reported by and time
-          Row(
-            children: [
-              const Icon(
-                Icons.person,
-                size: 16,
-                color: SimpleTheme.textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                issue.userName,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: SimpleTheme.textSecondary,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                _getTimeAgo(issue.createdAt),
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: SimpleTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          // View Details Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _showIssueDetails(issue);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: SimpleTheme.primaryBlue,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                'View Details',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showIssueDetails(IssueModel issue) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => IssueDetailScreen(issue: issue)),
-    );
+    setState(() {
+      _nearbyIssues = filteredIssues;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Issue Map'),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadIssues),
+      body: Container(
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Column(
+              children: [
+                _buildModernHeader(),
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    decoration: const BoxDecoration(
+                      color: ModernTheme.background,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildLocationStatus(),
+                        _buildFilters(),
+                        Expanded(child: _buildIssuesList()),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Issue Map',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Explore nearby issues',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.my_location, color: Colors.white),
+              onPressed: _getCurrentLocation,
+            ),
+          ),
         ],
       ),
-      body: Stack(
-        children: [
-          // Map
-          GoogleMap(
-            initialCameraPosition: _initialPosition,
-            markers: _markers,
-            onMapCreated: (controller) {
-              _mapController = controller;
-            },
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
-          ),
+    );
+  }
 
-          // Loading Overlay
-          if (_isLoading)
+  Widget _buildLocationStatus() {
+    return Container(
+      margin: const EdgeInsets.all(24),
+      child: ModernCard(
+        color:
+            _currentLocation != null
+                ? ModernTheme.success.withOpacity(0.1)
+                : ModernTheme.warning.withOpacity(0.1),
+        child: Row(
+          children: [
             Container(
-              color: Colors.black26,
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-
-          // Category Filter
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip(
-                    'All',
-                    isSelected: _selectedCategory == 'All',
-                  ),
-                  ...IssueCategories.categories.map((category) {
-                    return _buildFilterChip(
-                      category,
-                      isSelected: _selectedCategory == category,
-                    );
-                  }).toList(),
-                ],
-              ),
-            ),
-          ),
-
-          // Issue Count
-          Positioned(
-            bottom: 100,
-            left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                gradient:
+                    _currentLocation != null
+                        ? ModernTheme.successGradient
+                        : ModernTheme.warningGradient,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
+              child: Icon(
+                _currentLocation != null
+                    ? Icons.location_on
+                    : Icons.location_searching,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.location_on,
-                    size: 20,
-                    color: SimpleTheme.primaryBlue,
-                  ),
-                  const SizedBox(width: 8),
                   Text(
-                    '${_markers.length} ${_markers.length == 1 ? 'Issue' : 'Issues'}',
+                    _currentLocation != null
+                        ? 'Location Found'
+                        : _isGettingLocation
+                        ? 'Getting Location...'
+                        : 'Location Required',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color:
+                          _currentLocation != null
+                              ? ModernTheme.success
+                              : ModernTheme.warning,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _currentLocation != null
+                        ? 'Showing issues within ${_radiusKm}km radius'
+                        : 'Enable location to see nearby issues',
                     style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: SimpleTheme.textPrimary,
+                      fontSize: 14,
+                      color: ModernTheme.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+            if (_isGettingLocation)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
-          // Legend
-          Positioned(
-            bottom: 20,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Status',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildLegendItem('Pending', SimpleTheme.warning),
-                  _buildLegendItem('In Progress', SimpleTheme.accent),
-                  _buildLegendItem('Resolved', SimpleTheme.success),
-                  _buildLegendItem('Rejected', SimpleTheme.error),
-                ],
-              ),
+  Widget _buildFilters() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Filters',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: ModernTheme.textPrimary,
             ),
           ),
-        ],
-      ),
-    );
-  }
+          const SizedBox(height: 16),
 
-  Widget _buildFilterChip(String label, {required bool isSelected}) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: FilterChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (selected) {
-          setState(() {
-            _selectedCategory = label;
-            _createMarkers();
-          });
-        },
-        backgroundColor: Colors.white,
-        selectedColor: SimpleTheme.primaryBlue.withOpacity(0.2),
-        checkmarkColor: SimpleTheme.primaryBlue,
-        labelStyle: TextStyle(
-          color:
-              isSelected ? SimpleTheme.primaryBlue : SimpleTheme.textSecondary,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-        ),
-        side: BorderSide(
-          color: isSelected ? SimpleTheme.primaryBlue : Colors.grey[300]!,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLegendItem(String label, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          // Location Filter
+          const Text(
+            'Location Range',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: ModernTheme.textPrimary,
+            ),
           ),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 11)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildLocationFilterChip('Nearby', 'nearby', Icons.my_location),
+              const SizedBox(width: 8),
+              _buildLocationFilterChip('City', 'city', Icons.location_city),
+              const SizedBox(width: 8),
+              _buildLocationFilterChip('All', 'all', Icons.public),
+            ],
+          ),
+
+          // Radius Slider (only show for nearby)
+          if (_selectedLocationFilter == 'nearby') ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Text(
+                  'Radius: ',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: ModernTheme.textSecondary,
+                  ),
+                ),
+                Text(
+                  '${_radiusKm.toStringAsFixed(1)}km',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: ModernTheme.primaryBlue,
+                  ),
+                ),
+                Expanded(
+                  child: Slider(
+                    value: _radiusKm,
+                    min: 0.5,
+                    max: 50.0,
+                    divisions: 50,
+                    activeColor: ModernTheme.primaryBlue,
+                    onChanged: (value) {
+                      setState(() {
+                        _radiusKm = value;
+                      });
+                      _filterNearbyIssues();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
+          // Category Filter with Dropdown
+          const Text(
+            'Category',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: ModernTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildCategoryDropdown(),
+          const SizedBox(height: 20),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLocationFilterChip(String label, String value, IconData icon) {
+    final isSelected = _selectedLocationFilter == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedLocationFilter = value;
+        });
+        _filterNearbyIssues();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: isSelected ? ModernTheme.primaryGradient : null,
+          color: isSelected ? null : ModernTheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color:
+                isSelected
+                    ? Colors.transparent
+                    : ModernTheme.textTertiary.withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? Colors.white : ModernTheme.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : ModernTheme.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryDropdown() {
+    final categories = [
+      {'name': 'All', 'icon': Icons.apps},
+      {'name': 'Road & Transportation', 'icon': Icons.construction},
+      {'name': 'Water & Sewerage', 'icon': Icons.water_drop},
+      {'name': 'Electricity', 'icon': Icons.electrical_services},
+      {'name': 'Public Safety', 'icon': Icons.security},
+      {'name': 'Waste Management', 'icon': Icons.delete},
+      {'name': 'Parks & Recreation', 'icon': Icons.park},
+      {'name': 'Street Lighting', 'icon': Icons.lightbulb},
+      {'name': 'Public Buildings', 'icon': Icons.business},
+      {'name': 'Traffic Management', 'icon': Icons.traffic},
+      {'name': 'Environmental Issues', 'icon': Icons.eco},
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: ModernTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: ModernTheme.primaryBlue.withOpacity(0.3),
+          width: 1.5,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedCategory,
+          isExpanded: true,
+          icon: Icon(Icons.keyboard_arrow_down, color: ModernTheme.primaryBlue),
+          style: const TextStyle(
+            fontSize: 16,
+            color: ModernTheme.textPrimary,
+            fontWeight: FontWeight.w500,
+          ),
+          dropdownColor: ModernTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          menuMaxHeight: 300,
+          items:
+              categories.map((category) {
+                return DropdownMenuItem<String>(
+                  value: category['name'] as String,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color:
+                                _selectedCategory == category['name']
+                                    ? ModernTheme.primaryBlue.withOpacity(0.1)
+                                    : ModernTheme.textTertiary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            category['icon'] as IconData,
+                            size: 18,
+                            color:
+                                _selectedCategory == category['name']
+                                    ? ModernTheme.primaryBlue
+                                    : ModernTheme.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            category['name'] as String,
+                            style: TextStyle(
+                              color:
+                                  _selectedCategory == category['name']
+                                      ? ModernTheme.primaryBlue
+                                      : ModernTheme.textPrimary,
+                              fontWeight:
+                                  _selectedCategory == category['name']
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (_selectedCategory == category['name'])
+                          Icon(
+                            Icons.check_circle,
+                            size: 18,
+                            color: ModernTheme.primaryBlue,
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _selectedCategory = newValue;
+              });
+              _filterNearbyIssues();
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip(String category, IconData icon, Color color) {
+    final isSelected = _selectedCategory == category;
+    final displayText =
+        category == 'Road & Transportation'
+            ? 'Roads'
+            : category == 'Water & Sewerage'
+            ? 'Water'
+            : category == 'Public Safety'
+            ? 'Safety'
+            : category;
+
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedCategory = category;
+          });
+          _filterNearbyIssues();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? color : ModernTheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? color : color.withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: isSelected ? Colors.white : color),
+              const SizedBox(width: 4),
+              Text(
+                displayText,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIssuesList() {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading nearby issues...'),
+          ],
+        ),
+      );
+    }
+
+    if (_currentLocation == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: ModernTheme.warningGradient,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.location_off,
+                size: 48,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Location Required',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: ModernTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Please enable location access to see nearby issues',
+              style: TextStyle(fontSize: 16, color: ModernTheme.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            GradientButton(
+              text: 'Enable Location',
+              onPressed: _getCurrentLocation,
+              icon: Icons.location_on,
+              width: 180,
+              height: 44,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_nearbyIssues.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: ModernTheme.accentGradient,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.search_off,
+                size: 48,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'No Issues Found',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: ModernTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _selectedLocationFilter == 'nearby'
+                  ? 'No issues found within ${_radiusKm.toStringAsFixed(1)}km radius'
+                  : 'No issues found for selected filters',
+              style: const TextStyle(
+                fontSize: 16,
+                color: ModernTheme.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Results header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: ModernTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_nearbyIssues.length} Issues Found',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _selectedLocationFilter == 'nearby'
+                    ? 'Within ${_radiusKm.toStringAsFixed(1)}km'
+                    : _selectedLocationFilter == 'city'
+                    ? 'In your city'
+                    : 'All locations',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: ModernTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Issues list
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            physics: const BouncingScrollPhysics(),
+            itemCount: _nearbyIssues.length,
+            itemBuilder: (context, index) {
+              final issue = _nearbyIssues[index];
+              final distance =
+                  _currentLocation != null
+                      ? Geolocator.distanceBetween(
+                        _currentLocation!.latitude,
+                        _currentLocation!.longitude,
+                        issue.latitude,
+                        issue.longitude,
+                      )
+                      : 0.0;
+
+              return _buildIssueCard(issue, distance);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIssueCard(IssueModel issue, double distanceInMeters) {
+    final statusColor = _getStatusColor(issue.status);
+    final priorityColor = _getPriorityColor(issue.priority);
+    final distanceText =
+        distanceInMeters < 1000
+            ? '${distanceInMeters.toInt()}m away'
+            : '${(distanceInMeters / 1000).toStringAsFixed(1)}km away';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ModernCard(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => IssueDetailScreen(issue: issue),
+            ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    _getCategoryIcon(issue.category),
+                    size: 24,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        issue.title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: ModernTheme.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: 14,
+                            color: ModernTheme.primaryBlue,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            distanceText,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: ModernTheme.primaryBlue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                ModernStatusChip(
+                  text: _getStatusText(issue.status),
+                  color: statusColor,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Description
+            Text(
+              issue.description,
+              style: const TextStyle(
+                fontSize: 14,
+                color: ModernTheme.textSecondary,
+                height: 1.4,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 12),
+
+            // Footer
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    issue.category.split(' ').first, // Show first word only
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: ModernTheme.primaryBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: priorityColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    issue.priority,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'By ${issue.userName}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: ModernTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _getTimeAgo(issue.createdAt),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: ModernTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -466,30 +978,30 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return SimpleTheme.warning;
+        return ModernTheme.warning;
       case 'in_progress':
-        return SimpleTheme.accent;
+        return ModernTheme.accent;
       case 'resolved':
-        return SimpleTheme.success;
+        return ModernTheme.success;
       case 'rejected':
-        return SimpleTheme.error;
+        return ModernTheme.error;
       default:
-        return SimpleTheme.textSecondary;
+        return ModernTheme.textSecondary;
     }
   }
 
   Color _getPriorityColor(String priority) {
     switch (priority.toLowerCase()) {
       case 'low':
-        return SimpleTheme.success;
+        return ModernTheme.success;
       case 'medium':
-        return SimpleTheme.warning;
+        return ModernTheme.warning;
       case 'high':
-        return SimpleTheme.error;
+        return ModernTheme.error;
       case 'critical':
-        return Colors.red[800]!;
+        return const Color(0xFFDC2626);
       default:
-        return SimpleTheme.textSecondary;
+        return ModernTheme.textSecondary;
     }
   }
 
@@ -539,16 +1051,32 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
-    if (difference.inDays > 7) {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
     } else if (difference.inHours > 0) {
-      return '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+      return '${difference.inHours}h ago';
     } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} minute${difference.inMinutes > 1 ? 's' : ''} ago';
+      return '${difference.inMinutes}m ago';
     } else {
       return 'Just now';
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 }
