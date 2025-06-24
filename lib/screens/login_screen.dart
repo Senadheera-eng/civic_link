@@ -1,29 +1,64 @@
-// screens/login_screen.dart (SIMPLE COLORFUL VERSION)
+// screens/login_screen.dart (FIXED SCROLLING + ENHANCED UI)
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../theme/simple_theme.dart';
+import '../theme/modern_theme.dart';
 import 'register_screen.dart';
-import 'home_screen.dart';
-import 'admin_dashboard.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final AuthService _authService = AuthService();
 
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAnimations();
+  }
+
+  void _initAnimations() {
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+
+    _fadeController.forward();
+    _slideController.forward();
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _fadeController.dispose();
+    _slideController.dispose();
     super.dispose();
   }
 
@@ -35,7 +70,6 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       print("🔐 LoginScreen: Starting sign in attempt");
 
-      // Check auth state before sign in
       await _authService.checkAuthState();
 
       final result = await _authService.signInWithEmail(
@@ -46,8 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (result != null) {
         print("✅ LoginScreen: Sign in successful, getting user data");
 
-        // Small delay to ensure auth state is updated
-        await Future.delayed(Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 500));
 
         final userData = await _authService.getUserData();
         if (userData != null) {
@@ -74,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Expanded(child: Text(e.toString())),
             ],
           ),
-          backgroundColor: SimpleTheme.error,
+          backgroundColor: ModernTheme.error,
           duration: const Duration(seconds: 5),
         ),
       );
@@ -93,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString()),
-          backgroundColor: SimpleTheme.error,
+          backgroundColor: ModernTheme.error,
         ),
       );
     } finally {
@@ -105,37 +138,44 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              SimpleTheme.primaryBlue,
-              SimpleTheme.primaryBlue.withOpacity(0.8),
-              SimpleTheme.background,
-            ],
+            colors: [ModernTheme.gradientStart, ModernTheme.gradientEnd],
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                const SizedBox(height: 60),
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: Column(
+                children: [
+                  // Fixed Logo Section - No scroll
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 20),
+                    child: _buildLogo(),
+                  ),
 
-                // Logo Section
-                _buildLogo(),
-
-                const SizedBox(height: 60),
-
-                // Login Form
-                _buildLoginForm(),
-
-                const SizedBox(height: 24),
-
-                // Register Link
-                _buildRegisterLink(),
-              ],
+                  // Scrollable Form Section
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(), // No bouncing
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 20),
+                          _buildLoginForm(),
+                          const SizedBox(height: 32),
+                          _buildRegisterLink(),
+                          const SizedBox(height: 40), // Bottom padding
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -146,46 +186,65 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
-        Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.location_city,
-            size: 50,
-            color: SimpleTheme.primaryBlue,
+        Hero(
+          tag: 'app_logo',
+          child: Container(
+            width: 100, // Slightly smaller for better fit
+            height: 100,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.location_city,
+              size: 50,
+              color: ModernTheme.primaryBlue,
+            ),
           ),
         ),
         const SizedBox(height: 24),
         const Text(
           'CivicLink',
           style: TextStyle(
-            fontSize: 36,
+            fontSize: 36, // Slightly smaller
             fontWeight: FontWeight.bold,
             color: Colors.white,
+            letterSpacing: -1,
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Report. Track. Resolve.',
-          style: TextStyle(fontSize: 18, color: Colors.white70),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+          ),
+          child: const Text(
+            'Report. Track. Resolve.',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.5,
+            ),
+          ),
         ),
       ],
     );
   }
 
   Widget _buildLoginForm() {
-    return SimpleCard(
+    return ModernCard(
+      elevated: true,
+      borderRadius: BorderRadius.circular(24),
       child: Form(
         key: _formKey,
         child: Column(
@@ -193,26 +252,46 @@ class _LoginScreenState extends State<LoginScreen> {
             const Text(
               'Welcome Back!',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 26, // Slightly smaller
                 fontWeight: FontWeight.bold,
-                color: SimpleTheme.textPrimary,
+                color: ModernTheme.textPrimary,
+                letterSpacing: -0.5,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Sign in to continue',
-              style: TextStyle(fontSize: 16, color: SimpleTheme.textSecondary),
+            Text(
+              'Sign in to continue reporting and tracking issues',
+              style: TextStyle(
+                fontSize: 15,
+                color: ModernTheme.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
 
             // Email Field
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                prefixIcon: Icon(Icons.email, color: SimpleTheme.primaryBlue),
+              style: const TextStyle(fontSize: 16),
+              decoration: InputDecoration(
+                labelText: 'Email Address',
+                hintText: 'Enter your email',
+                prefixIcon: Container(
+                  margin: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.email_outlined,
+                    color: ModernTheme.primaryBlue,
+                    size: 20,
+                  ),
+                ),
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -227,22 +306,33 @@ class _LoginScreenState extends State<LoginScreen> {
               },
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
             // Password Field
             TextFormField(
               controller: _passwordController,
               obscureText: _obscurePassword,
+              style: const TextStyle(fontSize: 16),
               decoration: InputDecoration(
                 labelText: 'Password',
-                prefixIcon: const Icon(
-                  Icons.lock,
-                  color: SimpleTheme.primaryBlue,
+                hintText: 'Enter your password',
+                prefixIcon: Container(
+                  margin: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.lock_outline,
+                    color: ModernTheme.primaryBlue,
+                    size: 20,
+                  ),
                 ),
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                    color: SimpleTheme.textSecondary,
+                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    color: ModernTheme.textSecondary,
                   ),
                   onPressed:
                       () =>
@@ -260,55 +350,106 @@ class _LoginScreenState extends State<LoginScreen> {
               },
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
 
             // Sign In Button
-            ColorfulButton(
+            GradientButton(
               text: 'Sign In',
               onPressed: _signIn,
               isLoading: _isLoading,
               icon: Icons.login,
+              gradient: ModernTheme.primaryGradient,
+              height: 52,
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // Divider
-            const Row(
+            Row(
               children: [
-                Expanded(child: Divider()),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'OR',
-                    style: TextStyle(color: SimpleTheme.textSecondary),
+                Expanded(
+                  child: Container(
+                    height: 1,
+                    color: ModernTheme.textTertiary.withOpacity(0.3),
                   ),
                 ),
-                Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'OR',
+                    style: TextStyle(
+                      color: ModernTheme.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    height: 1,
+                    color: ModernTheme.textTertiary.withOpacity(0.3),
+                  ),
+                ),
               ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
             // Google Sign In Button
-            SizedBox(
+            Container(
               width: double.infinity,
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: _isLoading ? null : _signInWithGoogle,
-                icon: const Icon(Icons.login, color: SimpleTheme.error),
-                label: const Text('Continue with Google'),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: Colors.grey[300]!),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: ModernTheme.textTertiary.withOpacity(0.3),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  onTap: _isLoading ? null : _signInWithGoogle,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: ModernTheme.error.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.login,
+                          color: ModernTheme.error,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Continue with Google',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: ModernTheme.textPrimary,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // Test Account Info
           ],
         ),
       ),
@@ -316,28 +457,60 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildRegisterLink() {
-    return SimpleCard(
-      color: Colors.white.withOpacity(0.9),
+    return ModernCard(
+      color: Colors.white.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
             "Don't have an account? ",
-            style: TextStyle(color: SimpleTheme.textSecondary),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           GestureDetector(
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => RegisterScreen()),
+                PageRouteBuilder(
+                  pageBuilder:
+                      (context, animation, secondaryAnimation) =>
+                          RegisterScreen(),
+                  transitionsBuilder: (
+                    context,
+                    animation,
+                    secondaryAnimation,
+                    child,
+                  ) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(1.0, 0.0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    );
+                  },
+                ),
               );
             },
-            child: const Text(
-              'Sign Up',
-              style: TextStyle(
-                color: SimpleTheme.primaryBlue,
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withOpacity(0.3)),
+              ),
+              child: const Text(
+                'Sign Up',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
           ),
