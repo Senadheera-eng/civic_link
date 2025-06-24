@@ -572,7 +572,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               title: 'Notifications',
               subtitle: 'Stay updated',
               gradient: ModernTheme.warningGradient,
-              onTap: () => _showComingSoon('Notifications'),
+              onTap: () {},
             ),
           ],
         ),
