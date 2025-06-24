@@ -1,22 +1,29 @@
-// screens/report_issue_screen.dart
+// screens/modern_report_issue_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/issue_service.dart';
 import '../models/issue_model.dart';
-import '../theme/simple_theme.dart';
+import '../theme/modern_theme.dart';
 
-class ReportIssueScreen extends StatefulWidget {
-  const ReportIssueScreen({Key? key}) : super(key: key);
+class ModernReportIssueScreen extends StatefulWidget {
+  const ModernReportIssueScreen({Key? key}) : super(key: key);
 
   @override
-  State<ReportIssueScreen> createState() => _ReportIssueScreenState();
+  State<ModernReportIssueScreen> createState() =>
+      _ModernReportIssueScreenState();
 }
 
-class _ReportIssueScreenState extends State<ReportIssueScreen> {
+class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final IssueService _issueService = IssueService();
+
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   // Form controllers
   final _titleController = TextEditingController();
@@ -35,7 +42,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize with default values
+    _initAnimations();
     _selectedCategory = IssueCategories.categories.first;
     _selectedPriority =
         IssuePriorities.priorities.length > 1
@@ -44,10 +51,35 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     _getCurrentLocation();
   }
 
+  void _initAnimations() {
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+
+    _fadeController.forward();
+    _slideController.forward();
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _fadeController.dispose();
+    _slideController.dispose();
     super.dispose();
   }
 
@@ -55,7 +87,6 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     setState(() => _isGettingLocation = true);
 
     try {
-      // Check location service status first
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         throw Exception(
@@ -63,7 +94,6 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         );
       }
 
-      // Check permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -94,19 +124,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isGettingLocation = false);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Location error: ${e.toString()}'),
-            backgroundColor: SimpleTheme.error,
-            action: SnackBarAction(
-              label: 'Settings',
-              onPressed: () {
-                Geolocator.openAppSettings();
-              },
-            ),
-          ),
-        );
+        _showErrorSnackBar('Location error: ${e.toString()}');
       }
     }
   }
@@ -115,19 +133,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     try {
       final image = await _issueService.pickImageFromCamera();
       if (image != null && mounted) {
-        setState(() {
-          _selectedImages.add(image);
-        });
+        setState(() => _selectedImages.add(image));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: SimpleTheme.error,
-          ),
-        );
-      }
+      _showErrorSnackBar('Camera error: $e');
     }
   }
 
@@ -135,70 +144,37 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     try {
       final image = await _issueService.pickImageFromGallery();
       if (image != null && mounted) {
-        setState(() {
-          _selectedImages.add(image);
-        });
+        setState(() => _selectedImages.add(image));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: SimpleTheme.error,
-          ),
-        );
-      }
+      _showErrorSnackBar('Gallery error: $e');
     }
   }
 
   void _removeImage(int index) {
-    setState(() {
-      _selectedImages.removeAt(index);
-    });
+    setState(() => _selectedImages.removeAt(index));
   }
 
   Future<void> _submitIssue() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_currentLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please wait for location to be detected'),
-          backgroundColor: SimpleTheme.warning,
-        ),
-      );
+      _showErrorSnackBar('Please wait for location to be detected');
       return;
     }
 
     if (_selectedImages.isEmpty) {
-      final shouldContinue = await showDialog<bool>(
-        context: context,
-        builder:
-            (context) => AlertDialog(
-              title: const Text('No Images'),
-              content: const Text(
-                'Are you sure you want to submit without any images?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Continue'),
-                ),
-              ],
-            ),
+      final shouldContinue = await _showConfirmDialog(
+        'No Images',
+        'Are you sure you want to submit without any images?',
       );
-
       if (shouldContinue != true) return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final issueId = await _issueService.submitIssue(
+      await _issueService.submitIssue(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         category: _selectedCategory,
@@ -210,123 +186,231 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       );
 
       if (mounted) {
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Issue submitted successfully!'),
-              ],
-            ),
-            backgroundColor: SimpleTheme.success,
-          ),
-        );
-
-        // Navigate back to home
-        Navigator.pop(context, true); // Return true to indicate success
+        _showSuccessSnackBar('Issue submitted successfully!');
+        Navigator.pop(context, true);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit issue: $e'),
-            backgroundColor: SimpleTheme.error,
-          ),
-        );
-      }
+      _showErrorSnackBar('Failed to submit issue: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(message),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  Future<bool?> _showConfirmDialog(String title, String content) {
+    return showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Text(title),
+            content: Text(content),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              GradientButton(
+                text: 'Continue',
+                onPressed: () => Navigator.pop(context, true),
+                width: 100,
+                height: 40,
+              ),
+            ],
+          ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Report Issue'),
-        actions: [
-          if (_isLoading)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [ModernTheme.primaryBlue, ModernTheme.background],
+            stops: [0.0, 0.3],
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 16),
+                      decoration: const BoxDecoration(
+                        color: ModernTheme.background,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(32),
+                          topRight: Radius.circular(32),
+                        ),
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 8),
+                              _buildLocationStatus(),
+                              const SizedBox(height: 32),
+                              _buildTitleField(),
+                              const SizedBox(height: 24),
+                              _buildCategorySection(),
+                              const SizedBox(height: 24),
+                              _buildPrioritySection(),
+                              const SizedBox(height: 24),
+                              _buildDescriptionField(),
+                              const SizedBox(height: 32),
+                              _buildImageSection(),
+                              const SizedBox(height: 40),
+                              _buildSubmitButton(),
+                              const SizedBox(height: 24),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Location Status
-              _buildLocationStatus(),
-
-              const SizedBox(height: 24),
-
-              // Issue Title
-              _buildTitleField(),
-
-              const SizedBox(height: 16),
-
-              // Category Selection
-              _buildCategoryDropdown(),
-
-              const SizedBox(height: 16),
-
-              // Priority Selection
-              _buildPriorityDropdown(),
-
-              const SizedBox(height: 16),
-
-              // Description
-              _buildDescriptionField(),
-
-              const SizedBox(height: 24),
-
-              // Image Section
-              _buildImageSection(),
-
-              const SizedBox(height: 32),
-
-              // Submit Button
-              _buildSubmitButton(),
-            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildLocationStatus() {
-    return SimpleCard(
-      color:
-          _currentLocation != null
-              ? SimpleTheme.success.withOpacity(0.1)
-              : SimpleTheme.warning.withOpacity(0.1),
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
       child: Row(
         children: [
-          Icon(
-            _currentLocation != null ? Icons.location_on : Icons.location_off,
-            color:
-                _currentLocation != null
-                    ? SimpleTheme.success
-                    : SimpleTheme.warning,
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Report Issue',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Help improve your community',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isLoading)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationStatus() {
+    return ModernCard(
+      color:
+          _currentLocation != null
+              ? ModernTheme.success.withOpacity(0.1)
+              : ModernTheme.warning.withOpacity(0.1),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient:
+                  _currentLocation != null
+                      ? ModernTheme.successGradient
+                      : ModernTheme.warningGradient,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              _currentLocation != null ? Icons.location_on : Icons.location_off,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,33 +421,39 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       : 'Getting Location...',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
+                    fontSize: 16,
                     color:
                         _currentLocation != null
-                            ? SimpleTheme.success
-                            : SimpleTheme.warning,
+                            ? ModernTheme.success
+                            : ModernTheme.warning,
                   ),
                 ),
-                if (_address.isNotEmpty)
+                if (_address.isNotEmpty) ...[
+                  const SizedBox(height: 4),
                   Text(
                     _address,
                     style: const TextStyle(
-                      fontSize: 12,
-                      color: SimpleTheme.textSecondary,
+                      fontSize: 14,
+                      color: ModernTheme.textSecondary,
                     ),
                   ),
+                ],
               ],
             ),
           ),
           if (_isGettingLocation)
             const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: ModernTheme.warning,
+              ),
             )
           else if (_currentLocation != null)
             IconButton(
               onPressed: _getCurrentLocation,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh, color: ModernTheme.success),
             ),
         ],
       ),
@@ -375,19 +465,32 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Issue Title *',
+          'Issue Title',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: SimpleTheme.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: ModernTheme.textPrimary,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         TextFormField(
           controller: _titleController,
-          decoration: const InputDecoration(
-            hintText: 'Brief description of the issue',
-            prefixIcon: Icon(Icons.title, color: SimpleTheme.primaryBlue),
+          style: const TextStyle(fontSize: 16),
+          decoration: InputDecoration(
+            hintText: 'Brief description of the issue...',
+            prefixIcon: Container(
+              margin: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: ModernTheme.primaryBlue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.title,
+                color: ModernTheme.primaryBlue,
+                size: 20,
+              ),
+            ),
           ),
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
@@ -403,116 +506,153 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     );
   }
 
-  Widget _buildCategoryDropdown() {
+  Widget _buildCategorySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Category *',
+          'Category',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: SimpleTheme.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: ModernTheme.textPrimary,
           ),
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: _selectedCategory,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.category, color: SimpleTheme.primaryBlue),
-          ),
-          isExpanded: true,
-          items:
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children:
               IssueCategories.categories.map((category) {
-                return DropdownMenuItem<String>(
-                  value: category,
-                  child: Text(
-                    '${IssueCategories.categoryIcons[category] ?? '📝'} $category',
-                    overflow: TextOverflow.ellipsis,
+                final isSelected = _selectedCategory == category;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedCategory = category),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: isSelected ? ModernTheme.primaryGradient : null,
+                      color: isSelected ? null : ModernTheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color:
+                            isSelected
+                                ? Colors.transparent
+                                : ModernTheme.textTertiary.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          IssueCategories.categoryIcons[category] ?? '📝',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          category,
+                          style: TextStyle(
+                            color:
+                                isSelected
+                                    ? Colors.white
+                                    : ModernTheme.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
-          onChanged: (value) {
-            setState(() {
-              _selectedCategory = value!;
-            });
-          },
         ),
       ],
     );
   }
 
-  Widget _buildPriorityDropdown() {
+  Widget _buildPrioritySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Priority *',
+          'Priority Level',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: SimpleTheme.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: ModernTheme.textPrimary,
           ),
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: _selectedPriority,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(
-              Icons.priority_high,
-              color: SimpleTheme.primaryBlue,
-            ),
-          ),
-          isExpanded: true,
-          items:
+        const SizedBox(height: 16),
+        Row(
+          children:
               IssuePriorities.priorities.map((priority) {
+                final isSelected = _selectedPriority == priority;
                 Color priorityColor;
                 switch (priority.toLowerCase()) {
                   case 'low':
-                    priorityColor = SimpleTheme.success;
+                    priorityColor = ModernTheme.success;
                     break;
                   case 'medium':
-                    priorityColor = SimpleTheme.warning;
+                    priorityColor = ModernTheme.warning;
                     break;
                   case 'high':
-                    priorityColor = SimpleTheme.error;
+                    priorityColor = ModernTheme.error;
                     break;
                   case 'critical':
-                    priorityColor = Colors.red[800]!;
+                    priorityColor = const Color(0xFFDC2626);
                     break;
                   default:
-                    priorityColor = SimpleTheme.textSecondary;
+                    priorityColor = ModernTheme.textSecondary;
                 }
 
-                return DropdownMenuItem<String>(
-                  value: priority,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: priorityColor,
-                          shape: BoxShape.circle,
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedPriority = priority),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color:
+                            isSelected
+                                ? priorityColor.withOpacity(0.1)
+                                : ModernTheme.surfaceVariant,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color:
+                              isSelected ? priorityColor : Colors.transparent,
+                          width: 2,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          '$priority (${IssuePriorities.priorityDescriptions[priority] ?? ''})',
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: priorityColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            priority,
+                            style: TextStyle(
+                              color:
+                                  isSelected
+                                      ? priorityColor
+                                      : ModernTheme.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               }).toList(),
-          onChanged: (value) {
-            setState(() {
-              _selectedPriority = value!;
-            });
-          },
         ),
       ],
     );
@@ -523,17 +663,18 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Description *',
+          'Description',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: SimpleTheme.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: ModernTheme.textPrimary,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         TextFormField(
           controller: _descriptionController,
           maxLines: 4,
+          style: const TextStyle(fontSize: 16),
           decoration: const InputDecoration(
             hintText: 'Provide detailed description of the issue...',
             alignLabelWithHint: true,
@@ -559,67 +700,98 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         const Text(
           'Photos',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: SimpleTheme.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: ModernTheme.textPrimary,
           ),
         ),
         const SizedBox(height: 8),
         const Text(
           'Add photos to help authorities understand the issue better',
-          style: TextStyle(fontSize: 14, color: SimpleTheme.textSecondary),
+          style: TextStyle(fontSize: 14, color: ModernTheme.textSecondary),
         ),
         const SizedBox(height: 16),
 
-        // Image Actions
+        // Image Action Buttons
         Row(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
+              child: GradientButton(
+                text: 'Camera',
+                icon: Icons.camera_alt,
                 onPressed: _pickImageFromCamera,
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Camera'),
+                gradient: ModernTheme.accentGradient,
+                height: 48,
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _pickImageFromGallery,
-                icon: const Icon(Icons.photo_library),
-                label: const Text('Gallery'),
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  border: Border.all(color: ModernTheme.primaryBlue, width: 2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    onTap: _pickImageFromGallery,
+                    borderRadius: BorderRadius.circular(16),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.photo_library,
+                          color: ModernTheme.primaryBlue,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Gallery',
+                          style: TextStyle(
+                            color: ModernTheme.primaryBlue,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
         ),
 
-        const SizedBox(height: 16),
-
         // Selected Images
         if (_selectedImages.isNotEmpty) ...[
+          const SizedBox(height: 20),
           Text(
-            '${_selectedImages.length} photo(s) selected',
+            '${_selectedImages.length} photo${_selectedImages.length > 1 ? 's' : ''} selected',
             style: const TextStyle(
               fontSize: 14,
-              color: SimpleTheme.textSecondary,
+              color: ModernTheme.textSecondary,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 100,
+            height: 120,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
               itemCount: _selectedImages.length,
               itemBuilder: (context, index) {
                 return Container(
-                  width: 100,
+                  width: 120,
                   margin: const EdgeInsets.only(right: 12),
                   child: Stack(
                     children: [
                       Container(
-                        width: 100,
-                        height: 100,
+                        width: 120,
+                        height: 120,
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(16),
                           image: DecorationImage(
                             image: FileImage(File(_selectedImages[index].path)),
                             fit: BoxFit.cover,
@@ -627,20 +799,20 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                         ),
                       ),
                       Positioned(
-                        top: 4,
-                        right: 4,
+                        top: 8,
+                        right: 8,
                         child: GestureDetector(
                           onTap: () => _removeImage(index),
                           child: Container(
-                            width: 24,
-                            height: 24,
+                            width: 32,
+                            height: 32,
                             decoration: const BoxDecoration(
-                              color: SimpleTheme.error,
+                              color: ModernTheme.error,
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
                               Icons.close,
-                              size: 16,
+                              size: 18,
                               color: Colors.white,
                             ),
                           ),
@@ -658,12 +830,13 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   }
 
   Widget _buildSubmitButton() {
-    return ColorfulButton(
+    return GradientButton(
       text: 'Submit Issue',
       onPressed: _isLoading ? null : _submitIssue,
       isLoading: _isLoading,
       icon: Icons.send,
-      color: SimpleTheme.primaryBlue,
+      gradient: ModernTheme.primaryGradient,
+      height: 56,
     );
   }
 }
