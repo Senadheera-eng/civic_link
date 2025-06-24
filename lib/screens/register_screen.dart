@@ -138,31 +138,20 @@ class _RegisterScreenState extends State<RegisterScreen>
             opacity: _fadeAnimation,
             child: SlideTransition(
               position: _slideAnimation,
-              child: Column(
-                children: [
-                  // Fixed Logo Section
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 20),
-                    child: _buildLogo(),
-                  ),
-
-                  // Scrollable Form Section
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 20),
-                          _buildRegisterForm(),
-                          const SizedBox(height: 32),
-                          _buildLoginLink(),
-                          const SizedBox(height: 40),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 40),
+                    _buildLogo(),
+                    const SizedBox(height: 40),
+                    _buildRegisterForm(),
+                    const SizedBox(height: 32),
+                    _buildLoginLink(),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
             ),
           ),

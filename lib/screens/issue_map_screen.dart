@@ -94,22 +94,19 @@ class _IssueMapScreenState extends State<IssueMapScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [ModernTheme.primaryBlue, ModernTheme.background],
-            stops: [0.0, 0.3],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
-            child: Column(
-              children: [
-                _buildModernHeader(),
-                Expanded(
-                  child: Container(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  // Scrollable Header
+                  _buildModernHeader(),
+
+                  // Main Content Container
+                  Container(
                     margin: const EdgeInsets.only(top: 16),
                     decoration: const BoxDecoration(
                       color: ModernTheme.background,
@@ -324,32 +321,35 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                         const SizedBox(height: 24),
 
                         // Issues List
-                        Expanded(
-                          child:
-                              _isLoading
-                                  ? _buildLoadingState()
-                                  : _filteredIssues.isEmpty
-                                  ? _buildEmptyState()
-                                  : ListView.builder(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                    ),
-                                    physics: const BouncingScrollPhysics(),
-                                    itemCount: _filteredIssues.length,
-                                    itemBuilder: (context, index) {
-                                      final issue = _filteredIssues[index];
-                                      return _buildModernIssueCard(
-                                        issue,
-                                        index,
-                                      );
-                                    },
-                                  ),
-                        ),
+                        _isLoading
+                            ? _buildLoadingState()
+                            : _filteredIssues.isEmpty
+                            ? _buildEmptyState()
+                            : Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              child: Column(
+                                children:
+                                    _filteredIssues
+                                        .asMap()
+                                        .entries
+                                        .map(
+                                          (entry) => _buildModernIssueCard(
+                                            entry.value,
+                                            entry.key,
+                                          ),
+                                        )
+                                        .toList(),
+                              ),
+                            ),
+
+                        const SizedBox(height: 40), // Bottom padding
                       ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -51,23 +51,20 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [ModernTheme.primaryBlue, ModernTheme.background],
-            stops: [0.0, 0.3],
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
-            child: Column(
-              children: [
-                _buildModernHeader(),
-                _buildModernTabBar(),
-                Expanded(
-                  child: Container(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  // Scrollable Header
+                  _buildModernHeader(),
+                  _buildModernTabBar(),
+
+                  // Main Content Container
+                  Container(
                     margin: const EdgeInsets.only(top: 16),
                     decoration: const BoxDecoration(
                       color: ModernTheme.background,
@@ -81,16 +78,20 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
                             ConnectionState.waiting) {
-                          return _buildLoadingState();
+                          return Container(
+                            height: 400,
+                            child: _buildLoadingState(),
+                          );
                         }
 
                         if (snapshot.hasError) {
-                          return _buildErrorState();
+                          return Container(
+                            height: 400,
+                            child: _buildErrorState(),
+                          );
                         }
 
                         final issues = snapshot.data ?? [];
-
-                        // Filter issues based on selected tab
                         final filteredIssues =
                             _selectedFilter == 'all'
                                 ? issues
@@ -102,28 +103,31 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
                                     .toList();
 
                         if (filteredIssues.isEmpty) {
-                          return _buildEmptyState();
+                          return Container(
+                            height: 400,
+                            child: _buildEmptyState(),
+                          );
                         }
 
-                        return RefreshIndicator(
-                          onRefresh: () async {
-                            setState(() {});
-                          },
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(24),
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: filteredIssues.length,
-                            itemBuilder: (context, index) {
-                              final issue = filteredIssues[index];
-                              return _buildModernIssueCard(issue, index);
-                            },
+                        return Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            children: [
+                              ...filteredIssues.asMap().entries.map(
+                                (entry) => _buildModernIssueCard(
+                                  entry.value,
+                                  entry.key,
+                                ),
+                              ),
+                              const SizedBox(height: 40), // Bottom padding
+                            ],
                           ),
                         );
                       },
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

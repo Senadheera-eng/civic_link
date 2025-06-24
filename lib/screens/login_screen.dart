@@ -109,6 +109,11 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           backgroundColor: ModernTheme.error,
           duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
         ),
       );
     } finally {
@@ -125,8 +130,19 @@ class _LoginScreenState extends State<LoginScreen>
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.toString()),
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(e.toString())),
+            ],
+          ),
           backgroundColor: ModernTheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
         ),
       );
     } finally {
@@ -150,31 +166,20 @@ class _LoginScreenState extends State<LoginScreen>
             opacity: _fadeAnimation,
             child: SlideTransition(
               position: _slideAnimation,
-              child: Column(
-                children: [
-                  // Fixed Logo Section - No scroll
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 20),
-                    child: _buildLogo(),
-                  ),
-
-                  // Scrollable Form Section
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(), // No bouncing
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Column(
-                        children: [
-                          const SizedBox(height: 20),
-                          _buildLoginForm(),
-                          const SizedBox(height: 32),
-                          _buildRegisterLink(),
-                          const SizedBox(height: 40), // Bottom padding
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 40),
+                    _buildLogo(),
+                    const SizedBox(height: 40),
+                    _buildLoginForm(),
+                    const SizedBox(height: 32),
+                    _buildRegisterLink(),
+                    const SizedBox(height: 40),
+                  ],
+                ),
               ),
             ),
           ),
@@ -189,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen>
         Hero(
           tag: 'app_logo',
           child: Container(
-            width: 100, // Slightly smaller for better fit
+            width: 100,
             height: 100,
             decoration: BoxDecoration(
               color: Colors.white,
@@ -213,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen>
         const Text(
           'CivicLink',
           style: TextStyle(
-            fontSize: 36, // Slightly smaller
+            fontSize: 36,
             fontWeight: FontWeight.bold,
             color: Colors.white,
             letterSpacing: -1,
@@ -252,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen>
             const Text(
               'Welcome Back!',
               style: TextStyle(
-                fontSize: 26, // Slightly smaller
+                fontSize: 26,
                 fontWeight: FontWeight.bold,
                 color: ModernTheme.textPrimary,
                 letterSpacing: -0.5,
