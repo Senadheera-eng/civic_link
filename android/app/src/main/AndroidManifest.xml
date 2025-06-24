@@ -1,5 +1,5 @@
-<!-- android/app/src/main/AndroidManifest.xml -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.civic_link">
 
     <!-- Internet permission for Firebase -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -15,15 +15,6 @@
     <!-- Storage permissions for image handling -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    
-    <!-- Notification permissions (Android 13+) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
-    <!-- Wake lock for notifications -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    
-    <!-- Vibration for notifications -->
-    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:label="CivicLink"
@@ -51,37 +42,12 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            
-            <!-- Intent filter for notification taps -->
-            <intent-filter>
-                <action android:name="FLUTTER_NOTIFICATION_CLICK" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
         </activity>
-        
-        <!-- Firebase Cloud Messaging Service -->
-        <service
-            android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
         
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-            
-        <!-- Firebase Messaging default notification icon -->
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_notification" />
-            
-        <!-- Firebase Messaging default notification color -->
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_color"
-            android:resource="@color/notification_color" />
     </application>
 </manifest>
