@@ -132,3 +132,5 @@ class AuthWrapper extends StatelessWidget {
     );
   }
 }
+
+// Import for compatibility

@@ -1,8 +1,6 @@
 // screens/home_screen.dart (SIMPLE COLORFUL VERSION)
 import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
-import 'package:civic_link/screens/notification_screen.dart';
-import 'package:civic_link/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart';
@@ -23,22 +21,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadUserData();
-    _subscribeToNotifications();
-  }
-
-  Future<void> _subscribeToNotifications() async {
-    try {
-      // Subscribe to general updates
-      await NotificationService().subscribeToTopic('general_updates');
-
-      // Subscribe to user-specific updates if needed
-      final user = _authService.currentUser;
-      if (user != null) {
-        await NotificationService().subscribeToTopic('user_${user.uid}');
-      }
-    } catch (e) {
-      print('Error subscribing to notifications: $e');
-    }
   }
 
   Future<void> _loadUserData() async {
@@ -113,59 +95,44 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('CivicLink'),
         actions: [
-          // Notification Icon with Badge
-          Stack(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const NotificationsScreen(),
-                    ),
-                  );
-                },
-              ),
-              StreamBuilder<int>(
-                stream: NotificationService().getUnreadCount(),
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  if (count == 0) return const SizedBox.shrink();
-
-                  return Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: SimpleTheme.error,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
-                      child: Center(
-                        child: Text(
-                          count > 99 ? '99+' : '$count',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          // Existing PopupMenuButton
           PopupMenuButton<String>(
-            // ... existing code
+            onSelected: (value) {
+              if (value == 'logout') _signOut();
+            },
+            itemBuilder:
+                (context) => [
+                  const PopupMenuItem(
+                    value: 'profile',
+                    child: Row(
+                      children: [
+                        Icon(Icons.person),
+                        SizedBox(width: 8),
+                        Text('Profile'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'settings',
+                    child: Row(
+                      children: [
+                        Icon(Icons.settings),
+                        SizedBox(width: 8),
+                        Text('Settings'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: 'logout',
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Logout', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
           ),
         ],
       ),
@@ -392,14 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: 'Notifications',
               subtitle: 'Stay updated',
               color: SimpleTheme.primaryBlue,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationsScreen(),
-                  ),
-                );
-              },
+              onTap: () => _showComingSoon('Notifications'),
             ),
           ],
         ),
