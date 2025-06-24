@@ -232,8 +232,9 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                         ),
 
                         // Modern Filters Section
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -246,15 +247,16 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                                   letterSpacing: -0.3,
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 12),
                               // Category Filter
                               SizedBox(
-                                height: 44,
+                                height: 40,
                                 child: ListView(
                                   scrollDirection: Axis.horizontal,
                                   physics: const BouncingScrollPhysics(),
+                                  padding: EdgeInsets.zero,
                                   children: [
-                                    _buildModernFilterChip(
+                                    _buildCompactFilterChip(
                                       label: 'All',
                                       icon: Icons.apps,
                                       isSelected: _selectedCategory == 'All',
@@ -262,52 +264,78 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                                           () => setState(
                                             () => _selectedCategory = 'All',
                                           ),
-                                      gradient: ModernTheme.accentGradient,
+                                      color: ModernTheme.accent,
                                     ),
-                                    ...IssueCategories.categories.map((
-                                      category,
-                                    ) {
-                                      return _buildModernFilterChip(
-                                        label: category,
-                                        icon: _getCategoryIcon(category),
-                                        isSelected:
-                                            _selectedCategory == category,
-                                        onSelected:
-                                            () => setState(
-                                              () =>
-                                                  _selectedCategory = category,
-                                            ),
-                                        gradient: ModernTheme.primaryGradient,
-                                      );
-                                    }).toList(),
+                                    _buildCompactFilterChip(
+                                      label: 'Roads',
+                                      icon: Icons.construction,
+                                      isSelected:
+                                          _selectedCategory ==
+                                          'Road & Transportation',
+                                      onSelected:
+                                          () => setState(
+                                            () =>
+                                                _selectedCategory =
+                                                    'Road & Transportation',
+                                          ),
+                                      color: ModernTheme.primaryBlue,
+                                    ),
+                                    _buildCompactFilterChip(
+                                      label: 'Water',
+                                      icon: Icons.water_drop,
+                                      isSelected:
+                                          _selectedCategory ==
+                                          'Water & Sewerage',
+                                      onSelected:
+                                          () => setState(
+                                            () =>
+                                                _selectedCategory =
+                                                    'Water & Sewerage',
+                                          ),
+                                      color: ModernTheme.info,
+                                    ),
+                                    _buildCompactFilterChip(
+                                      label: 'Safety',
+                                      icon: Icons.security,
+                                      isSelected:
+                                          _selectedCategory == 'Public Safety',
+                                      onSelected:
+                                          () => setState(
+                                            () =>
+                                                _selectedCategory =
+                                                    'Public Safety',
+                                          ),
+                                      color: ModernTheme.error,
+                                    ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 8),
                               // Status Filter
                               SizedBox(
-                                height: 44,
+                                height: 40,
                                 child: ListView(
                                   scrollDirection: Axis.horizontal,
                                   physics: const BouncingScrollPhysics(),
+                                  padding: EdgeInsets.zero,
                                   children: [
-                                    _buildModernStatusChip(
+                                    _buildStatusFilterChip(
                                       'All',
                                       ModernTheme.textSecondary,
                                     ),
-                                    _buildModernStatusChip(
+                                    _buildStatusFilterChip(
                                       'pending',
                                       ModernTheme.warning,
                                     ),
-                                    _buildModernStatusChip(
+                                    _buildStatusFilterChip(
                                       'in_progress',
                                       ModernTheme.accent,
                                     ),
-                                    _buildModernStatusChip(
+                                    _buildStatusFilterChip(
                                       'resolved',
                                       ModernTheme.success,
                                     ),
-                                    _buildModernStatusChip(
+                                    _buildStatusFilterChip(
                                       'rejected',
                                       ModernTheme.error,
                                     ),
@@ -325,9 +353,9 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                             ? _buildLoadingState()
                             : _filteredIssues.isEmpty
                             ? _buildEmptyState()
-                            : Padding(
+                            : Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
+                                horizontal: 20,
                               ),
                               child: Column(
                                 children:
@@ -335,7 +363,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                                         .asMap()
                                         .entries
                                         .map(
-                                          (entry) => _buildModernIssueCard(
+                                          (entry) => _buildCompactIssueCard(
                                             entry.value,
                                             entry.key,
                                           ),
@@ -412,56 +440,41 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     );
   }
 
-  Widget _buildModernFilterChip({
+  Widget _buildCompactFilterChip({
     required String label,
     required IconData icon,
     required bool isSelected,
     required VoidCallback onSelected,
-    required LinearGradient gradient,
+    required Color color,
   }) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
       child: GestureDetector(
         onTap: onSelected,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            gradient: isSelected ? gradient : null,
-            color: isSelected ? null : ModernTheme.surface,
-            borderRadius: BorderRadius.circular(22),
+            color: isSelected ? color : ModernTheme.surface,
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color:
                   isSelected
-                      ? Colors.transparent
+                      ? color
                       : ModernTheme.textTertiary.withOpacity(0.3),
-              width: 1.5,
+              width: 1,
             ),
-            boxShadow:
-                isSelected
-                    ? [
-                      BoxShadow(
-                        color: gradient.colors.first.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                    : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isSelected ? Colors.white : ModernTheme.textSecondary,
-              ),
-              const SizedBox(width: 6),
+              Icon(icon, size: 14, color: isSelected ? Colors.white : color),
+              const SizedBox(width: 4),
               Text(
-                label.length > 12 ? '${label.substring(0, 12)}...' : label,
+                label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : ModernTheme.textPrimary,
+                  color: isSelected ? Colors.white : color,
                   fontWeight: FontWeight.w600,
-                  fontSize: 13,
+                  fontSize: 11,
                 ),
               ),
             ],
@@ -471,49 +484,249 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     );
   }
 
-  Widget _buildModernStatusChip(String status, Color color) {
+  Widget _buildStatusFilterChip(String status, Color color) {
     final isSelected = _selectedStatus == status;
     final displayText = status == 'All' ? 'All' : _getStatusText(status);
 
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
       child: GestureDetector(
         onTap: () => setState(() => _selectedStatus = status),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            gradient:
-                isSelected
-                    ? LinearGradient(colors: [color, color.withOpacity(0.8)])
-                    : null,
-            color: isSelected ? null : ModernTheme.surface,
-            borderRadius: BorderRadius.circular(22),
+            color: isSelected ? color : ModernTheme.surface,
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isSelected ? Colors.transparent : color.withOpacity(0.3),
-              width: 1.5,
+              color: isSelected ? color : color.withOpacity(0.3),
+              width: 1,
             ),
-            boxShadow:
-                isSelected
-                    ? [
-                      BoxShadow(
-                        color: color.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                    : null,
           ),
           child: Text(
             displayText,
             style: TextStyle(
               color: isSelected ? Colors.white : color,
               fontWeight: FontWeight.w600,
-              fontSize: 13,
+              fontSize: 11,
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildCompactIssueCard(IssueModel issue, int index) {
+    final statusColor = _getStatusColor(issue.status);
+    final priorityColor = _getPriorityColor(issue.priority);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ModernCard(
+        padding: const EdgeInsets.all(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => IssueDetailScreen(issue: issue),
+            ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
+            Row(
+              children: [
+                // Category Icon
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _getCategoryIcon(issue.category),
+                    size: 20,
+                    color: ModernTheme.primaryBlue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Title and Status
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        issue.title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: ModernTheme.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: 12,
+                            color: ModernTheme.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              issue.address,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: ModernTheme.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Status Chip
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    _getStatusText(issue.status),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Description
+            Text(
+              issue.description,
+              style: const TextStyle(
+                fontSize: 13,
+                color: ModernTheme.textSecondary,
+                height: 1.3,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 12),
+
+            // Footer Row
+            Row(
+              children: [
+                // Category Tag
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    _getShortCategory(issue.category),
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: ModernTheme.primaryBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Priority
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: priorityColor,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    issue.priority,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                // Reporter and Time
+                Icon(Icons.person, size: 12, color: ModernTheme.textSecondary),
+                const SizedBox(width: 4),
+                Text(
+                  issue.userName.length > 8
+                      ? '${issue.userName.substring(0, 8)}...'
+                      : issue.userName,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: ModernTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _getTimeAgo(issue.createdAt),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: ModernTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getShortCategory(String category) {
+    switch (category) {
+      case 'Road & Transportation':
+        return 'Roads';
+      case 'Water & Sewerage':
+        return 'Water';
+      case 'Public Safety':
+        return 'Safety';
+      case 'Waste Management':
+        return 'Waste';
+      case 'Parks & Recreation':
+        return 'Parks';
+      case 'Street Lighting':
+        return 'Lights';
+      case 'Public Buildings':
+        return 'Buildings';
+      case 'Traffic Management':
+        return 'Traffic';
+      case 'Environmental Issues':
+        return 'Environment';
+      default:
+        return category.length > 8 ? category.substring(0, 8) : category;
+    }
   }
 
   Widget _buildLoadingState() {
@@ -666,6 +879,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 // Status
                 ModernStatusChip(
                   text: _getStatusText(issue.status),
@@ -693,47 +907,58 @@ class _IssueMapScreenState extends State<IssueMapScreen>
 
             // Footer Row
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Category and Reporter
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: ModernTheme.primaryBlue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        issue.category,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: ModernTheme.primaryBlue,
-                          fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ModernTheme.primaryBlue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _shortenLabel(issue.category),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: ModernTheme.primaryBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Icon(
-                      Icons.person,
-                      size: 14,
-                      color: ModernTheme.textSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      issue.userName,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: ModernTheme.textSecondary,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.person,
+                            size: 14,
+                            color: ModernTheme.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            issue.userName.length > 10
+                                ? '${issue.userName.substring(0, 10)}...'
+                                : issue.userName,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: ModernTheme.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 // Priority and Time
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -758,7 +983,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(height: 4),
                     Text(
                       _getTimeAgo(issue.createdAt),
                       style: const TextStyle(
@@ -775,6 +1000,35 @@ class _IssueMapScreenState extends State<IssueMapScreen>
         ),
       ),
     );
+  }
+
+  // Helper method to shorten labels
+  String _shortenLabel(String label) {
+    if (label.length <= 12) return label;
+
+    // Create abbreviations for common categories
+    switch (label) {
+      case 'Road & Transportation':
+        return 'Road & Trans';
+      case 'Water & Sewerage':
+        return 'Water & Sew';
+      case 'Public Safety':
+        return 'Safety';
+      case 'Waste Management':
+        return 'Waste Mgmt';
+      case 'Parks & Recreation':
+        return 'Parks & Rec';
+      case 'Street Lighting':
+        return 'Lighting';
+      case 'Public Buildings':
+        return 'Buildings';
+      case 'Traffic Management':
+        return 'Traffic';
+      case 'Environmental Issues':
+        return 'Environment';
+      default:
+        return label.length > 12 ? '${label.substring(0, 12)}...' : label;
+    }
   }
 
   Color _getStatusColor(String status) {
