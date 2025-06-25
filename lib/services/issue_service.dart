@@ -1,5 +1,6 @@
 // services/issue_service.dart
 import 'dart:io';
+import 'package:civic_link/services/notification_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -294,6 +295,43 @@ class IssueService {
     } catch (e) {
       print("❌ Error getting issue by ID: $e");
       return null;
+    }
+  }
+
+  Future<void> updateIssueStatus({
+    required String issueId,
+    required String newStatus,
+    String? adminNotes,
+  }) async {
+    try {
+      // Update issue in Firestore
+      await _firestore.collection('issues').doc(issueId).update({
+        'status': newStatus,
+        'adminNotes': adminNotes,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Get issue details to find the user
+      final issueDoc = await _firestore.collection('issues').doc(issueId).get();
+      if (issueDoc.exists) {
+        final issueData = issueDoc.data() as Map<String, dynamic>;
+        final userId = issueData['userId'];
+        final issueTitle = issueData['title'];
+
+        // Send notification to user
+        await NotificationService().sendIssueUpdateNotification(
+          userId: userId,
+          issueId: issueId,
+          issueTitle: issueTitle,
+          newStatus: newStatus,
+          adminNotes: adminNotes,
+        );
+      }
+
+      print("✅ Issue status updated and notification sent");
+    } catch (e) {
+      print("❌ Error updating issue status: $e");
+      throw 'Failed to update issue status: $e';
     }
   }
 

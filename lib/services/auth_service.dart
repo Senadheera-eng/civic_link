@@ -1,4 +1,5 @@
 // services/auth_service.dart (WITH DEBUG LOGGING)
+import 'package:civic_link/services/notification_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -97,6 +98,8 @@ class AuthService {
 
       // Create user document in Firestore
       await _createUserDocument(result.user!, fullName, userType);
+
+      await NotificationService().sendWelcomeNotification(result.user!.uid);
 
       return result;
     } on FirebaseAuthException catch (e) {

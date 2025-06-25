@@ -1,8 +1,8 @@
-// screens/my_issues_screen.dart
+// screens/my_issues_screen.dart (MODERN UI UPDATE)
 import 'package:flutter/material.dart';
 import '../services/issue_service.dart';
 import '../models/issue_model.dart';
-import '../theme/simple_theme.dart';
+import '../theme/modern_theme.dart';
 import 'issue_detail_screen.dart';
 
 class MyIssuesScreen extends StatefulWidget {
@@ -13,117 +13,315 @@ class MyIssuesScreen extends StatefulWidget {
 }
 
 class _MyIssuesScreenState extends State<MyIssuesScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final IssueService _issueService = IssueService();
   late TabController _tabController;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
+
   String _selectedFilter = 'all';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _initAnimations();
+  }
+
+  void _initAnimations() {
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+    _fadeController.forward();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Issues'),
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabs: const [
-            Tab(text: 'All'),
-            Tab(text: 'Pending'),
-            Tab(text: 'In Progress'),
-            Tab(text: 'Resolved'),
-          ],
-          onTap: (index) {
-            setState(() {
-              switch (index) {
-                case 0:
-                  _selectedFilter = 'all';
-                  break;
-                case 1:
-                  _selectedFilter = 'pending';
-                  break;
-                case 2:
-                  _selectedFilter = 'in_progress';
-                  break;
-                case 3:
-                  _selectedFilter = 'resolved';
-                  break;
-              }
-            });
-          },
-        ),
-      ),
-      body: StreamBuilder<List<IssueModel>>(
-        stream: _issueService.getUserIssuesStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(
+      body: Container(
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 60,
-                    color: SimpleTheme.error,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error loading issues',
-                    style: TextStyle(color: SimpleTheme.error),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: () => setState(() {}),
-                    child: const Text('Retry'),
+                  // Scrollable Header
+                  _buildModernHeader(),
+                  _buildModernTabBar(),
+
+                  // Main Content Container
+                  Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    decoration: const BoxDecoration(
+                      color: ModernTheme.background,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
+                    ),
+                    child: StreamBuilder<List<IssueModel>>(
+                      stream: _issueService.getUserIssuesStream(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Container(
+                            height: 400,
+                            child: _buildLoadingState(),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Container(
+                            height: 400,
+                            child: _buildErrorState(),
+                          );
+                        }
+
+                        final issues = snapshot.data ?? [];
+                        final filteredIssues =
+                            _selectedFilter == 'all'
+                                ? issues
+                                : issues
+                                    .where(
+                                      (issue) =>
+                                          issue.status == _selectedFilter,
+                                    )
+                                    .toList();
+
+                        if (filteredIssues.isEmpty) {
+                          return Container(
+                            height: 400,
+                            child: _buildEmptyState(),
+                          );
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            children: [
+                              ...filteredIssues.asMap().entries.map(
+                                (entry) => _buildModernIssueCard(
+                                  entry.value,
+                                  entry.key,
+                                ),
+                              ),
+                              const SizedBox(height: 40), // Bottom padding
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
-            );
-          }
-
-          final issues = snapshot.data ?? [];
-
-          // Filter issues based on selected tab
-          final filteredIssues =
-              _selectedFilter == 'all'
-                  ? issues
-                  : issues
-                      .where((issue) => issue.status == _selectedFilter)
-                      .toList();
-
-          if (filteredIssues.isEmpty) {
-            return _buildEmptyState();
-          }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {});
-            },
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: filteredIssues.length,
-              itemBuilder: (context, index) {
-                final issue = filteredIssues[index];
-                return _buildIssueCard(issue);
-              },
             ),
-          );
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'My Issues',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Track your reported issues',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernTabBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicator: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withOpacity(0.9),
+              Colors.white.withOpacity(0.8),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        labelColor: ModernTheme.primaryBlue,
+        unselectedLabelColor: Colors.white,
+        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+        ),
+        tabs: const [
+          Tab(text: 'All'),
+          Tab(text: 'Pending'),
+          Tab(text: 'In Progress'),
+          Tab(text: 'Resolved'),
+        ],
+        onTap: (index) {
+          setState(() {
+            switch (index) {
+              case 0:
+                _selectedFilter = 'all';
+                break;
+              case 1:
+                _selectedFilter = 'pending';
+                break;
+              case 2:
+                _selectedFilter = 'in_progress';
+                break;
+              case 3:
+                _selectedFilter = 'resolved';
+                break;
+            }
+          });
         },
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: ModernTheme.accentGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: ModernTheme.accent.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 3,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Loading your issues...',
+            style: TextStyle(
+              fontSize: 16,
+              color: ModernTheme.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: ModernTheme.errorGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: ModernTheme.error.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Error loading issues',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: ModernTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GradientButton(
+            text: 'Retry',
+            onPressed: () => setState(() {}),
+            width: 120,
+            height: 44,
+            gradient: ModernTheme.primaryGradient,
+          ),
+        ],
       ),
     );
   }
@@ -133,26 +331,41 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            _selectedFilter == 'all' ? Icons.inbox : Icons.filter_list,
-            size: 80,
-            color: SimpleTheme.textSecondary.withOpacity(0.5),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: ModernTheme.accentGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: ModernTheme.accent.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Icon(
+              _selectedFilter == 'all' ? Icons.inbox : Icons.filter_list,
+              size: 48,
+              color: Colors.white,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           Text(
             _selectedFilter == 'all'
                 ? 'No issues reported yet'
                 : 'No ${_getStatusText(_selectedFilter)} issues',
             style: const TextStyle(
-              fontSize: 18,
-              color: SimpleTheme.textSecondary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: ModernTheme.textPrimary,
             ),
           ),
           if (_selectedFilter == 'all') ...[
             const SizedBox(height: 8),
             const Text(
               'Report an issue to see it here',
-              style: TextStyle(fontSize: 14, color: SimpleTheme.textSecondary),
+              style: TextStyle(fontSize: 16, color: ModernTheme.textSecondary),
             ),
           ],
         ],
@@ -160,13 +373,13 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
     );
   }
 
-  Widget _buildIssueCard(IssueModel issue) {
+  Widget _buildModernIssueCard(IssueModel issue, int index) {
     final statusColor = _getStatusColor(issue.status);
     final priorityColor = _getPriorityColor(issue.priority);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: ModernCard(
         onTap: () {
           Navigator.push(
             context,
@@ -175,193 +388,276 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
             ),
           );
         },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          issue.title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: SimpleTheme.textPrimary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header Row
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: ModernTheme.primaryBlue.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    _getCategoryIcon(issue.category),
+                    size: 24,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        issue.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: ModernTheme.textPrimary,
+                          letterSpacing: -0.3,
                         ),
-                        const SizedBox(height: 4),
-                        Row(
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: 14,
+                            color: ModernTheme.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              issue.address,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: ModernTheme.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    ModernStatusChip(
+                      text: _getStatusText(issue.status),
+                      color: statusColor,
+                      icon: _getStatusIcon(issue.status),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            priorityColor,
+                            priorityColor.withOpacity(0.8),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: priorityColor.withOpacity(0.3),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        issue.priority,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Description
+            Text(
+              issue.description,
+              style: const TextStyle(
+                fontSize: 15,
+                color: ModernTheme.textSecondary,
+                height: 1.5,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 16),
+
+            // Footer Row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: ModernTheme.primaryBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        issue.category,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: ModernTheme.primaryBlue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (issue.imageUrls.isNotEmpty) ...[
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: ModernTheme.accentGradient,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.location_on,
-                              size: 14,
-                              color: SimpleTheme.textSecondary,
+                            const Icon(
+                              Icons.image,
+                              size: 12,
+                              color: Colors.white,
                             ),
                             const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                issue.address,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: SimpleTheme.textSecondary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            Text(
+                              '${issue.imageUrls.length}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      StatusChip(
-                        text: _getStatusText(issue.status),
-                        color: statusColor,
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: priorityColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          issue.priority,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: priorityColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
                       ),
                     ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Description
-              Text(
-                issue.description,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: SimpleTheme.textSecondary,
+                  ],
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-
-              const SizedBox(height: 12),
-
-              // Footer Row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _getCategoryIcon(issue.category),
-                        size: 16,
-                        color: SimpleTheme.textSecondary,
+                Row(
+                  children: [
+                    Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: ModernTheme.textSecondary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _getTimeAgo(issue.createdAt),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: ModernTheme.textSecondary,
+                        fontWeight: FontWeight.w500,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        issue.category,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: SimpleTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      if (issue.imageUrls.isNotEmpty) ...[
-                        Icon(
-                          Icons.image,
-                          size: 16,
-                          color: SimpleTheme.textSecondary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${issue.imageUrls.length}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: SimpleTheme.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      Icon(
-                        Icons.access_time,
-                        size: 16,
-                        color: SimpleTheme.textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _getTimeAgo(issue.createdAt),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: SimpleTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              // Admin Notes (if any)
-              if (issue.adminNotes != null && issue.adminNotes!.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: SimpleTheme.accent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 16,
-                        color: SimpleTheme.accent,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Admin: ${issue.adminNotes}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: SimpleTheme.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
+            ),
+
+            // Admin Notes (if any)
+            if (issue.adminNotes != null && issue.adminNotes!.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      ModernTheme.accent.withOpacity(0.1),
+                      ModernTheme.accent.withOpacity(0.05),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: ModernTheme.accent.withOpacity(0.2),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        gradient: ModernTheme.accentGradient,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Admin Response',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: ModernTheme.accent,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            issue.adminNotes!,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: ModernTheme.textPrimary,
+                              height: 1.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -370,30 +666,45 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return SimpleTheme.warning;
+        return ModernTheme.warning;
       case 'in_progress':
-        return SimpleTheme.accent;
+        return ModernTheme.accent;
       case 'resolved':
-        return SimpleTheme.success;
+        return ModernTheme.success;
       case 'rejected':
-        return SimpleTheme.error;
+        return ModernTheme.error;
       default:
-        return SimpleTheme.textSecondary;
+        return ModernTheme.textSecondary;
     }
   }
 
   Color _getPriorityColor(String priority) {
     switch (priority.toLowerCase()) {
       case 'low':
-        return SimpleTheme.success;
+        return ModernTheme.success;
       case 'medium':
-        return SimpleTheme.warning;
+        return ModernTheme.warning;
       case 'high':
-        return SimpleTheme.error;
+        return ModernTheme.error;
       case 'critical':
-        return Colors.red[800]!;
+        return const Color(0xFFDC2626);
       default:
-        return SimpleTheme.textSecondary;
+        return ModernTheme.textSecondary;
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return Icons.pending;
+      case 'in_progress':
+        return Icons.construction;
+      case 'resolved':
+        return Icons.check_circle;
+      case 'rejected':
+        return Icons.cancel;
+      default:
+        return Icons.help;
     }
   }
 
