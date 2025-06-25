@@ -1,17 +1,16 @@
-// screens/home_screen.dart (COMPLETELY FIXED VERSION)
+// screens/home_screen.dart (WITH REAL DATA INTEGRATION)
 import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
+import 'package:civic_link/screens/notifications_screen.dart';
+import 'package:civic_link/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/issue_service.dart';
-import '../services/notification_service.dart';
 import '../models/user_model.dart';
 import '../models/issue_model.dart';
-import '../models/notification_model.dart';
 import '../theme/modern_theme.dart';
 import 'report_issue_screen.dart';
 import 'issue_detail_screen.dart';
-import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -22,7 +21,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final AuthService _authService = AuthService();
   final IssueService _issueService = IssueService();
   late AnimationController _fadeController;
+  late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   UserModel? _userData;
   List<IssueModel> _userIssues = [];
@@ -33,15 +34,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _pendingCount = 0;
   int _thisMonthCount = 0;
 
-  // Notification count - updated via listener
-  int _unreadNotificationCount = 0;
-
   @override
   void initState() {
     super.initState();
     _initAnimations();
     _loadData();
-    _listenToNotifications();
   }
 
   void _initAnimations() {
@@ -49,34 +46,40 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
-    _fadeController.forward();
-  }
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
 
-  void _listenToNotifications() {
-    NotificationService().getUserNotificationsStream().listen((notifications) {
-      if (mounted) {
-        setState(() {
-          _unreadNotificationCount =
-              notifications.where((n) => !n.isRead).length;
-        });
-      }
-    });
+    _fadeController.forward();
+    _slideController.forward();
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
+    _slideController.dispose();
     super.dispose();
   }
 
   Future<void> _loadData() async {
     try {
+      // Load user data
       final userData = await _authService.getUserData();
+
+      // Load user's issues
       final userIssues = await _issueService.getUserIssues();
+
+      // Calculate statistics
       _calculateStatistics(userIssues);
 
       setState(() {
@@ -86,7 +89,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       });
     } catch (e) {
       print('Error loading data: $e');
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -98,20 +103,48 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         issues
             .where((issue) => issue.status.toLowerCase() == 'resolved')
             .length;
+
     _pendingCount =
         issues.where((issue) => issue.status.toLowerCase() == 'pending').length;
+
     _thisMonthCount =
         issues.where((issue) => issue.createdAt.isAfter(currentMonth)).length;
   }
 
   Future<void> _signOut() async {
     try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => const Center(
+              child: ModernCard(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Signing out...'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+      );
+
       await _authService.signOut();
+      Navigator.of(context).pop();
       Navigator.pushReplacementNamed(context, '/login');
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Sign out failed: $e')));
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sign out failed: $e'),
+          backgroundColor: ModernTheme.error,
+        ),
+      );
     }
   }
 
@@ -131,7 +164,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 SizedBox(height: 24),
                 Text(
                   'Loading CivicLink...',
-                  style: TextStyle(color: Colors.white, fontSize: 18),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -146,37 +183,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
-            child: Column(
-              children: [
-                _buildHeader(),
-                Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(top: 16),
-                    decoration: const BoxDecoration(
-                      color: ModernTheme.background,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(32),
-                        topRight: Radius.circular(32),
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: RefreshIndicator(
+                onRefresh: _loadData,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      // Scrollable Header
+                      _buildModernHeader(),
+
+                      // Main Content Container
+                      Container(
+                        margin: const EdgeInsets.only(top: 16),
+                        decoration: const BoxDecoration(
+                          color: ModernTheme.background,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(32),
+                            topRight: Radius.circular(32),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 8),
+                              _buildQuickStats(),
+                              const SizedBox(height: 32),
+                              _buildQuickActions(),
+                              const SizedBox(height: 32),
+                              _buildRecentActivity(),
+                              const SizedBox(height: 40), // Bottom padding
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildQuickStats(),
-                          const SizedBox(height: 32),
-                          _buildQuickActions(),
-                          const SizedBox(height: 32),
-                          _buildRecentActivity(),
-                          const SizedBox(height: 50), // Safe bottom padding
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -184,80 +230,127 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
+  Widget _buildModernHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
       child: Column(
         children: [
           // Top Bar
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.location_city,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Expanded(
+                child: Row(
                   children: [
-                    Text(
-                      'CivicLink',
-                      style: TextStyle(
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.location_city,
                         color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                        size: 28,
                       ),
                     ),
-                    Text(
-                      'Report. Track. Resolve.',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'CivicLink',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            'Report. Track. Resolve.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-              PopupMenuButton<String>(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Profile Menu
+                  PopupMenuButton<String>(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.person_outline,
+                        color: Colors.white,
+                      ),
+                    ),
+                    onSelected: (value) {
+                      if (value == 'logout') _signOut();
+                    },
+                    itemBuilder:
+                        (context) => [
+                          const PopupMenuItem(
+                            value: 'profile',
+                            child: Row(
+                              children: [
+                                Icon(Icons.person),
+                                SizedBox(width: 12),
+                                Text('Profile'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'settings',
+                            child: Row(
+                              children: [
+                                Icon(Icons.settings),
+                                SizedBox(width: 12),
+                                Text('Settings'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            value: 'logout',
+                            child: Row(
+                              children: [
+                                Icon(Icons.logout, color: Colors.red),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Logout',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                   ),
-                  child: const Icon(Icons.person_outline, color: Colors.white),
-                ),
-                onSelected: (value) {
-                  if (value == 'logout') _signOut();
-                },
-                itemBuilder:
-                    (context) => [
-                      const PopupMenuItem(
-                        value: 'profile',
-                        child: Text('Profile'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'settings',
-                        child: Text('Settings'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'logout',
-                        child: Text('Logout'),
-                      ),
-                    ],
+                ],
               ),
             ],
           ),
 
           const SizedBox(height: 32),
 
-          // Welcome Section
+          // Welcome Message
           Row(
             children: [
               Container(
@@ -280,15 +373,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   children: [
                     const Text(
                       'Welcome back!',
-                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       _userData?.fullName ?? 'User',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
                       ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -299,18 +401,94 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _userData?.userType.toUpperCase() ?? 'CITIZEN',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
                         ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _userData?.isAdmin == true
+                                ? Icons.admin_panel_settings
+                                : Icons.person,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              _userData?.userType.toUpperCase() ?? 'CITIZEN',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
+              ),
+            ],
+          ),
+          // Add notification button with badge
+          Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.notifications, color: Colors.white),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              // Notification badge
+              FutureBuilder<int>(
+                future: NotificationService().getUnreadCount(),
+                builder: (context, snapshot) {
+                  final count = snapshot.data ?? 0;
+                  if (count == 0) return const SizedBox.shrink();
+
+                  return Positioned(
+                    right: 6,
+                    top: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        count > 99 ? '99+' : count.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -323,13 +501,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Quick Overview',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: ModernTheme.textPrimary,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Text(
+                'Quick Overview',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.textPrimary,
+                  letterSpacing: -0.5,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: ModernTheme.accentGradient,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Live',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 20),
         Row(
@@ -376,111 +578,67 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             fontSize: 22,
             fontWeight: FontWeight.bold,
             color: ModernTheme.textPrimary,
+            letterSpacing: -0.5,
           ),
         ),
         const SizedBox(height: 20),
-
-        // Grid with ALL buttons using the same pattern
-        SizedBox(
-          height: 320, // Fixed height for grid
-          child: GridView.count(
-            crossAxisCount: 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _buildActionCard(
-                icon: Icons.report_problem_outlined,
-                title: 'Report Issue',
-                subtitle: 'Report new problems',
-                gradient: ModernTheme.errorGradient,
-                onTap: () => _navigateToReportIssue(),
-              ),
-              _buildActionCard(
-                icon: Icons.track_changes_outlined,
-                title: 'Track Issues',
-                subtitle: 'Monitor your reports',
-                gradient: ModernTheme.accentGradient,
-                onTap:
-                    () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const MyIssuesScreen(),
-                      ),
-                    ),
-              ),
-              _buildActionCard(
-                icon: Icons.map_outlined,
-                title: 'Issue Map',
-                subtitle: 'View nearby issues',
-                gradient: ModernTheme.successGradient,
-                onTap:
-                    () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const IssueMapScreen(),
-                      ),
-                    ),
-              ),
-              _buildNotificationsActionCard(),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Notifications action card with badge overlay - but SAME base structure
-  Widget _buildNotificationsActionCard() {
-    return Stack(
-      children: [
-        _buildActionCard(
-          icon: Icons.notifications_outlined,
-          title: 'Notifications',
-          subtitle:
-              _unreadNotificationCount > 0
-                  ? '$_unreadNotificationCount new updates'
-                  : 'Stay updated',
-          gradient: ModernTheme.warningGradient,
-          onTap:
-              () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const NotificationsScreen(),
-                ),
-              ),
-        ),
-        if (_unreadNotificationCount > 0)
-          Positioned(
-            right: 8,
-            top: 8,
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  _unreadNotificationCount > 99
-                      ? '99+'
-                      : '$_unreadNotificationCount',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+        GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1.0,
+          children: [
+            _buildGradientActionCard(
+              icon: Icons.report_problem_outlined,
+              title: 'Report Issue',
+              subtitle: 'Report new problems',
+              gradient: ModernTheme.errorGradient,
+              onTap: () => _navigateToReportIssue(),
             ),
-          ),
+            _buildGradientActionCard(
+              icon: Icons.track_changes_outlined,
+              title: 'Track Issues',
+              subtitle: 'Monitor your reports',
+              gradient: ModernTheme.accentGradient,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MyIssuesScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildGradientActionCard(
+              icon: Icons.map_outlined,
+              title: 'Issue Map',
+              subtitle: 'View nearby issues',
+              gradient: ModernTheme.successGradient,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const IssueMapScreen(),
+                  ),
+                );
+              },
+            ),
+            _buildGradientActionCard(
+              icon: Icons.notifications_outlined,
+              title: 'Notifications',
+              subtitle: 'Stay updated',
+              gradient: ModernTheme.warningGradient,
+              onTap: () => _showComingSoon('Notifications'),
+            ),
+          ],
+        ),
       ],
     );
   }
 
-  // Action card widget - identical for all buttons
-  Widget _buildActionCard({
+  Widget _buildGradientActionCard({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -525,16 +683,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
+                    letterSpacing: -0.3,
                   ),
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.white.withOpacity(0.9),
+                    fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -545,6 +710,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildRecentActivity() {
+    // Get the most recent 3 issues
     final recentIssues = _userIssues.take(3).toList();
 
     return Column(
@@ -553,45 +719,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Recent Activity',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: ModernTheme.textPrimary,
+            const Expanded(
+              child: Text(
+                'Recent Activity',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.textPrimary,
+                  letterSpacing: -0.5,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            TextButton(
-              onPressed:
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const MyIssuesScreen(),
-                    ),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MyIssuesScreen(),
                   ),
-              child: const Text('View All'),
+                );
+              },
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text('View All'),
+              style: TextButton.styleFrom(
+                foregroundColor: ModernTheme.primaryBlue,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 20),
 
+        // Show real issues or empty state
         if (recentIssues.isEmpty)
-          _buildEmptyState()
+          _buildEmptyActivityState()
         else
-          ...recentIssues.map(
-            (issue) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildActivityItem(issue),
-            ),
-          ),
+          ...recentIssues
+              .map(
+                (issue) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildActivityItem(issue),
+                ),
+              )
+              .toList(),
       ],
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyActivityState() {
     return ModernCard(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             padding: const EdgeInsets.all(16),
@@ -613,25 +790,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               fontWeight: FontWeight.w600,
               color: ModernTheme.textPrimary,
             ),
-            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           const Text(
-            'Start by reporting your first\ncommunity issue',
+            'Start by reporting your first community issue',
             style: TextStyle(fontSize: 14, color: ModernTheme.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          SizedBox(
+          GradientButton(
+            text: 'Report Issue',
+            onPressed: () => _navigateToReportIssue(),
+            icon: Icons.add,
             width: 140,
             height: 40,
-            child: GradientButton(
-              text: 'Report Issue',
-              onPressed: () => _navigateToReportIssue(),
-              icon: Icons.add,
-              width: 140,
-              height: 40,
-            ),
           ),
         ],
       ),
@@ -640,21 +812,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildActivityItem(IssueModel issue) {
     final statusColor = _getStatusColor(issue.status);
+    final gradient = _getGradientForCategory(issue.category);
 
     return ModernCard(
-      onTap:
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => IssueDetailScreen(issue: issue),
-            ),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => IssueDetailScreen(issue: issue),
           ),
+        );
+      },
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              gradient: ModernTheme.accentGradient,
+              gradient: gradient,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -685,11 +859,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     fontSize: 14,
                     color: ModernTheme.textSecondary,
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
           ModernStatusChip(
             text: _getStatusText(issue.status),
             color: statusColor,
@@ -699,7 +874,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Helper methods
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -730,6 +904,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  LinearGradient _getGradientForCategory(String category) {
+    switch (category) {
+      case 'Road & Transportation':
+        return ModernTheme.accentGradient;
+      case 'Water & Sewerage':
+        return ModernTheme.primaryGradient;
+      case 'Electricity':
+        return ModernTheme.warningGradient;
+      case 'Public Safety':
+        return ModernTheme.errorGradient;
+      case 'Waste Management':
+        return ModernTheme.successGradient;
+      default:
+        return ModernTheme.accentGradient;
+    }
+  }
+
   IconData _getCategoryIcon(String category) {
     switch (category) {
       case 'Road & Transportation':
@@ -742,17 +933,54 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return Icons.security;
       case 'Waste Management':
         return Icons.delete;
+      case 'Parks & Recreation':
+        return Icons.park;
+      case 'Street Lighting':
+        return Icons.lightbulb;
+      case 'Public Buildings':
+        return Icons.business;
+      case 'Traffic Management':
+        return Icons.traffic;
+      case 'Environmental Issues':
+        return Icons.eco;
       default:
         return Icons.report_problem;
     }
   }
 
   String _getTimeAgo(DateTime dateTime) {
-    final difference = DateTime.now().difference(dateTime);
-    if (difference.inDays > 0) return '${difference.inDays}d ago';
-    if (difference.inHours > 0) return '${difference.inHours}h ago';
-    if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
-    return 'Just now';
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 7) {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    } else if (difference.inDays > 0) {
+      return '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} minute${difference.inMinutes > 1 ? 's' : ''} ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  void _showComingSoon(String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.rocket_launch, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text('$feature feature coming soon!')),
+          ],
+        ),
+        backgroundColor: ModernTheme.primaryBlue,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   void _navigateToReportIssue() async {
@@ -760,6 +988,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       context,
       MaterialPageRoute(builder: (context) => const ModernReportIssueScreen()),
     );
-    if (result == true) _loadData();
+
+    if (result == true) {
+      _loadData(); // Refresh data when returning from report screen
+    }
   }
 }
