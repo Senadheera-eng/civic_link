@@ -1,8 +1,9 @@
-// screens/home_screen.dart (WITH REAL DATA INTEGRATION)
+// screens/home_screen.dart (WITH SETTINGS NAVIGATION)
 import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
 import 'package:civic_link/screens/notifications_screen.dart';
 import 'package:civic_link/services/notification_service.dart';
+import 'package:civic_link/screens/setting_screen.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/issue_service.dart';
@@ -148,6 +149,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _navigateToSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => SettingsScreen()),
+    );
+  }
+
+  void _editProfile() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.info, color: Colors.white),
+            SizedBox(width: 12),
+            Text('Profile editing available in Settings'),
+          ],
+        ),
+        backgroundColor: ModernTheme.primaryBlue,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -289,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Profile Menu
+                  // Profile Menu with Settings
                   PopupMenuButton<String>(
                     icon: Container(
                       padding: const EdgeInsets.all(8),
@@ -303,7 +329,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                     onSelected: (value) {
-                      if (value == 'logout') _signOut();
+                      switch (value) {
+                        case 'profile':
+                          _editProfile();
+                          break;
+                        case 'settings':
+                          _navigateToSettings();
+                          break;
+                        case 'logout':
+                          _signOut();
+                          break;
+                      }
                     },
                     itemBuilder:
                         (context) => [

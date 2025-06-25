@@ -1,5 +1,5 @@
-// main.dart (FIXED VERSION WITH PROPER ERROR HANDLING)
-import 'package:civic_link/services/notification_service.dart';
+// main.dart (SIMPLE COLORFUL VERSION)
+import 'package:civic_link/screens/setting_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -10,7 +10,9 @@ import 'screens/admin_dashboard.dart';
 import 'services/auth_service.dart';
 import 'theme/simple_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart' show User;
+import 'package:civic_link/services/notification_service.dart';
 import 'models/user_model.dart';
+import 'services/settings_service.dart'; //for settings service
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,9 +29,10 @@ void main() async {
     print("🔔 Initializing Notifications...");
     await NotificationService().initialize();
     print("✅ Notifications initialized successfully");
+    await SettingsService().initializeSettings();
+    print("✅ Settings service initialized");
   } catch (e) {
     print("❌ Initialization failed: $e");
-    // Continue anyway - app can work without notifications
   }
 
   runApp(MyApp());
@@ -48,6 +51,7 @@ class MyApp extends StatelessWidget {
         '/register': (context) => RegisterScreen(),
         '/home': (context) => HomeScreen(),
         '/admin': (context) => AdminDashboard(),
+        '/settings': (context) => SettingsScreen(),
       },
     );
   }
