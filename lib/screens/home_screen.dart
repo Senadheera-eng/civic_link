@@ -1,4 +1,4 @@
-// screens/home_screen.dart (FIXED VERSION)
+// screens/home_screen.dart (COMPLETELY FIXED VERSION)
 import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
 import 'package:flutter/material.dart';
@@ -33,11 +33,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _pendingCount = 0;
   int _thisMonthCount = 0;
 
+  // Notification count - updated via listener
+  int _unreadNotificationCount = 0;
+
   @override
   void initState() {
     super.initState();
     _initAnimations();
     _loadData();
+    _listenToNotifications();
   }
 
   void _initAnimations() {
@@ -50,6 +54,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       end: 1.0,
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
     _fadeController.forward();
+  }
+
+  void _listenToNotifications() {
+    NotificationService().getUserNotificationsStream().listen((notifications) {
+      if (mounted) {
+        setState(() {
+          _unreadNotificationCount =
+              notifications.where((n) => !n.isRead).length;
+        });
+      }
+    });
   }
 
   @override
@@ -242,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           const SizedBox(height: 32),
 
-          // Welcome Section (NO BELL ICON)
+          // Welcome Section
           Row(
             children: [
               Container(
@@ -365,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         const SizedBox(height: 20),
 
-        // FIXED: Simple Grid with Equal Heights
+        // Grid with ALL buttons using the same pattern
         SizedBox(
           height: 320, // Fixed height for grid
           child: GridView.count(
@@ -407,60 +422,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
               ),
-              // Notifications card with StreamBuilder
-              StreamBuilder<List<NotificationModel>>(
-                stream: NotificationService().getUserNotificationsStream(),
-                builder: (context, snapshot) {
-                  final notifications = snapshot.data ?? [];
-                  final unreadCount =
-                      notifications.where((n) => !n.isRead).length;
-
-                  return Stack(
-                    children: [
-                      _buildActionCard(
-                        icon: Icons.notifications_outlined,
-                        title: 'Notifications',
-                        subtitle:
-                            unreadCount > 0
-                                ? '$unreadCount new updates'
-                                : 'Stay updated',
-                        gradient: ModernTheme.warningGradient,
-                        onTap:
-                            () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder:
-                                    (context) => const NotificationsScreen(),
-                              ),
-                            ),
-                      ),
-                      if (unreadCount > 0)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            width: 24,
-                            height: 24,
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                unreadCount > 99 ? '99+' : '$unreadCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
+              _buildNotificationsActionCard(),
             ],
           ),
         ),
@@ -468,7 +430,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // FIXED: Simple action card without complications
+  // Notifications action card with badge overlay - but SAME base structure
+  Widget _buildNotificationsActionCard() {
+    return Stack(
+      children: [
+        _buildActionCard(
+          icon: Icons.notifications_outlined,
+          title: 'Notifications',
+          subtitle:
+              _unreadNotificationCount > 0
+                  ? '$_unreadNotificationCount new updates'
+                  : 'Stay updated',
+          gradient: ModernTheme.warningGradient,
+          onTap:
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsScreen(),
+                ),
+              ),
+        ),
+        if (_unreadNotificationCount > 0)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  _unreadNotificationCount > 99
+                      ? '99+'
+                      : '$_unreadNotificationCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // Action card widget - identical for all buttons
   Widget _buildActionCard({
     required IconData icon,
     required String title,
@@ -564,7 +575,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         const SizedBox(height: 20),
 
-        // FIXED: Clean container with proper constraints
         if (recentIssues.isEmpty)
           _buildEmptyState()
         else
@@ -578,7 +588,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // FIXED: Simple empty state without overflow
   Widget _buildEmptyState() {
     return ModernCard(
       child: Column(
