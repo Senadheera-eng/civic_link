@@ -40,11 +40,12 @@ dependencies:
   google_maps_flutter: ^2.5.0
   firebase_storage: ^12.4.7
   cached_network_image: ^3.4.1
+  shared_preferences: ^2.2.2  # Added for updating settings function
   provider: ^6.1.1
   url_launcher: ^6.2.2
   share_plus: ^7.2.1
   firebase_messaging: ^15.2.7
-
+  
 firebase_core: ^2.24.2
 firebase_auth: ^4.15.3
 cloud_firestore: ^4.13.6

@@ -1,4 +1,5 @@
 // main.dart (SIMPLE COLORFUL VERSION)
+import 'package:civic_link/screens/setting_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -10,6 +11,7 @@ import 'services/auth_service.dart';
 import 'theme/simple_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'models/user_model.dart';
+import 'services/settings_service.dart'; //for settings service
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,8 +21,12 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     print("✅ Firebase initialized successfully");
+
+    // Initialize settings service
+    await SettingsService().initializeSettings();
+    print("✅ Settings service initialized");
   } catch (e) {
-    print("❌ Firebase initialization failed: $e");
+    print("❌ Initialization failed: $e");
   }
 
   runApp(MyApp());
@@ -39,6 +45,7 @@ class MyApp extends StatelessWidget {
         '/register': (context) => RegisterScreen(),
         '/home': (context) => HomeScreen(),
         '/admin': (context) => AdminDashboard(),
+        '/settings': (context) => SettingsScreen(),
       },
     );
   }

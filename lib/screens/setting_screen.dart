@@ -1,147 +1,323 @@
-// screens/settings_screen.dart
+// screens/settings_screen.dart (COMPLETE FINAL VERSION)
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/settings_service.dart';
 import '../models/user_model.dart';
-import '../theme/simple_theme.dart';
-import '../utils/helpers.dart';
-import '../utils/validators.dart';
-import '../widgets/custom_widgets.dart';
+import '../theme/modern_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with TickerProviderStateMixin {
   final AuthService _authService = AuthService();
+  final SettingsService _settingsService = SettingsService();
+
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
+
   UserModel? _userData;
   bool _isLoading = true;
+  bool _isUpdating = false;
+
+  // Settings state
   bool _notificationsEnabled = true;
   bool _emailNotifications = true;
   bool _pushNotifications = true;
+  bool _locationEnabled = false;
+  bool _biometricEnabled = false;
   String _selectedLanguage = 'English';
   String _selectedTheme = 'Light';
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-    _loadSettings();
+    _initAnimations();
+    _loadData();
   }
 
-  Future<void> _loadUserData() async {
-    final userData = await _authService.getUserData();
-    setState(() {
-      _userData = userData;
-      _isLoading = false;
-    });
+  void _initAnimations() {
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+    _fadeController.forward();
   }
 
-  Future<void> _loadSettings() async {
-    // In a real app, you would load these from SharedPreferences or Firebase
-    // For now, we'll use default values
-    setState(() {
-      _notificationsEnabled = true;
-      _emailNotifications = true;
-      _pushNotifications = true;
-      _selectedLanguage = 'English';
-      _selectedTheme = 'Light';
-    });
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
   }
 
-  Future<void> _saveSettings() async {
-    // In a real app, you would save these to SharedPreferences or Firebase
-    Helpers.showSnackBar(context, 'Settings saved successfully!');
+  Future<void> _loadData() async {
+    try {
+      // Load user data
+      final userData = await _authService.getUserData();
+
+      // Load settings from SettingsService
+      await _settingsService.initializeSettings();
+
+      setState(() {
+        _userData = userData;
+        _notificationsEnabled = _settingsService.notificationsEnabled;
+        _emailNotifications = _settingsService.emailNotifications;
+        _pushNotifications = _settingsService.pushNotifications;
+        _locationEnabled = _settingsService.locationEnabled;
+        _biometricEnabled = _settingsService.biometricEnabled;
+        _selectedLanguage = _settingsService.selectedLanguage;
+        _selectedTheme = _settingsService.selectedTheme;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('Failed to load settings: $e');
+    }
+  }
+
+  Future<void> _updateNotificationSettings() async {
+    setState(() => _isUpdating = true);
+
+    try {
+      await _settingsService.updateNotificationSettings(
+        notificationsEnabled: _notificationsEnabled,
+        emailNotifications: _emailNotifications,
+        pushNotifications: _pushNotifications,
+      );
+      _showSuccessSnackBar('Notification settings updated!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to update settings: $e');
+    } finally {
+      setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<void> _updateAppPreferences() async {
+    setState(() => _isUpdating = true);
+
+    try {
+      await _settingsService.updateAppPreferences(
+        language: _selectedLanguage,
+        theme: _selectedTheme,
+      );
+      _showSuccessSnackBar('App preferences updated!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to update preferences: $e');
+    } finally {
+      setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<void> _updatePrivacySettings() async {
+    setState(() => _isUpdating = true);
+
+    try {
+      await _settingsService.updatePrivacySettings(
+        locationEnabled: _locationEnabled,
+        biometricEnabled: _biometricEnabled,
+      );
+      _showSuccessSnackBar('Privacy settings updated!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to update privacy settings: $e');
+    } finally {
+      setState(() => _isUpdating = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Settings')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: ModernTheme.primaryGradient,
+          ),
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: Colors.white),
+                SizedBox(height: 24),
+                Text(
+                  'Loading Settings...',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveSettings,
-            tooltip: 'Save Settings',
+      body: Container(
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    decoration: const BoxDecoration(
+                      color: ModernTheme.background,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 8),
+                          _buildProfileSection(),
+                          const SizedBox(height: 32),
+                          _buildAccountSettings(),
+                          const SizedBox(height: 24),
+                          _buildNotificationSettings(),
+                          const SizedBox(height: 24),
+                          _buildAppPreferences(),
+                          const SizedBox(height: 24),
+                          _buildPrivacySettings(),
+                          const SizedBox(height: 24),
+                          _buildAboutSection(),
+                          const SizedBox(height: 24),
+                          _buildDangerZone(),
+                          const SizedBox(height: 40),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Profile Section
-            _buildProfileSection(),
-            const SizedBox(height: 24),
-
-            // Account Settings
-            _buildAccountSettings(),
-            const SizedBox(height: 24),
-
-            // Notification Settings
-            _buildNotificationSettings(),
-            const SizedBox(height: 24),
-
-            // App Preferences
-            _buildAppPreferences(),
-            const SizedBox(height: 24),
-
-            // Privacy & Security
-            _buildPrivacySettings(),
-            const SizedBox(height: 24),
-
-            // About & Support
-            _buildAboutSection(),
-            const SizedBox(height: 24),
-
-            // Danger Zone
-            _buildDangerZone(),
-          ],
         ),
       ),
     );
   }
 
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Settings',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Manage your account and preferences',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isUpdating)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfileSection() {
-    return SimpleCard(
+    return ModernCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Profile',
+            'Profile Information',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: SimpleTheme.textPrimary,
+              color: ModernTheme.textPrimary,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Row(
             children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: SimpleTheme.primaryBlue,
-                child: Text(
-                  _userData?.fullName.isNotEmpty == true
-                      ? _userData!.fullName[0].toUpperCase()
-                      : 'U',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  gradient: ModernTheme.primaryGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: ModernTheme.primaryBlue.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    _userData?.fullName.isNotEmpty == true
+                        ? _userData!.fullName[0].toUpperCase()
+                        : 'U',
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 20),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,24 +325,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(
                       _userData?.fullName ?? 'User',
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
+                        color: ModernTheme.textPrimary,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
                       _userData?.email ?? 'user@example.com',
                       style: const TextStyle(
                         fontSize: 14,
-                        color: SimpleTheme.textSecondary,
+                        color: ModernTheme.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    StatusChip(
+                    const SizedBox(height: 8),
+                    ModernStatusChip(
                       text: _userData?.userType.toUpperCase() ?? 'CITIZEN',
                       color:
                           _userData?.isAdmin == true
-                              ? SimpleTheme.error
-                              : SimpleTheme.accent,
+                              ? ModernTheme.error
+                              : ModernTheme.accent,
                       icon:
                           _userData?.isAdmin == true
                               ? Icons.admin_panel_settings
@@ -175,7 +353,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
-              IconButton(icon: const Icon(Icons.edit), onPressed: _editProfile),
+              Container(
+                decoration: BoxDecoration(
+                  color: ModernTheme.primaryBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.edit, color: ModernTheme.primaryBlue),
+                  onPressed: _editProfile,
+                ),
+              ),
             ],
           ),
         ],
@@ -184,214 +371,182 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildAccountSettings() {
-    return SimpleCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Account Settings',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: SimpleTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            icon: Icons.person_outline,
-            title: 'Edit Profile',
-            subtitle: 'Update your personal information',
-            onTap: _editProfile,
-          ),
-          _buildSettingsTile(
-            icon: Icons.lock_outline,
-            title: 'Change Password',
-            subtitle: 'Update your account password',
-            onTap: _changePassword,
-          ),
-          _buildSettingsTile(
-            icon: Icons.email_outlined,
-            title: 'Email Preferences',
-            subtitle: 'Manage email settings',
-            onTap: _emailPreferences,
-          ),
-        ],
+    return _buildSection('Account Settings', [
+      _buildSettingsTile(
+        icon: Icons.person_outline,
+        title: 'Edit Profile',
+        subtitle: 'Update your personal information',
+        onTap: _editProfile,
       ),
-    );
+      _buildSettingsTile(
+        icon: Icons.lock_outline,
+        title: 'Change Password',
+        subtitle: 'Update your account password',
+        onTap: _changePassword,
+      ),
+      _buildSettingsTile(
+        icon: Icons.email_outlined,
+        title: 'Email Preferences',
+        subtitle: 'Manage email settings',
+        onTap: _emailPreferences,
+      ),
+    ]);
   }
 
   Widget _buildNotificationSettings() {
-    return SimpleCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Notifications',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: SimpleTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildSwitchTile(
-            icon: Icons.notifications_outlined,
-            title: 'Enable Notifications',
-            subtitle: 'Receive app notifications',
-            value: _notificationsEnabled,
-            onChanged: (value) {
-              setState(() => _notificationsEnabled = value);
-            },
-          ),
-          _buildSwitchTile(
-            icon: Icons.email_outlined,
-            title: 'Email Notifications',
-            subtitle: 'Receive notifications via email',
-            value: _emailNotifications,
-            onChanged: (value) {
-              setState(() => _emailNotifications = value);
-            },
-          ),
-          _buildSwitchTile(
-            icon: Icons.phone_android,
-            title: 'Push Notifications',
-            subtitle: 'Receive push notifications',
-            value: _pushNotifications,
-            onChanged: (value) {
-              setState(() => _pushNotifications = value);
-            },
-          ),
-        ],
+    return _buildSection('Notifications', [
+      _buildSwitchTile(
+        icon: Icons.notifications_outlined,
+        title: 'Enable Notifications',
+        subtitle: 'Receive app notifications',
+        value: _notificationsEnabled,
+        onChanged: (value) async {
+          setState(() => _notificationsEnabled = value);
+          await _updateNotificationSettings();
+        },
       ),
-    );
+      _buildSwitchTile(
+        icon: Icons.email_outlined,
+        title: 'Email Notifications',
+        subtitle: 'Receive notifications via email',
+        value: _emailNotifications,
+        onChanged: (value) async {
+          setState(() => _emailNotifications = value);
+          await _updateNotificationSettings();
+        },
+      ),
+      _buildSwitchTile(
+        icon: Icons.phone_android,
+        title: 'Push Notifications',
+        subtitle: 'Receive push notifications',
+        value: _pushNotifications,
+        onChanged: (value) async {
+          setState(() => _pushNotifications = value);
+          await _updateNotificationSettings();
+        },
+      ),
+    ]);
   }
 
   Widget _buildAppPreferences() {
-    return SimpleCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'App Preferences',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: SimpleTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildDropdownTile(
-            icon: Icons.language,
-            title: 'Language',
-            subtitle: 'Choose your preferred language',
-            value: _selectedLanguage,
-            items: ['English', 'Spanish', 'French', 'German'],
-            onChanged: (value) {
-              setState(() => _selectedLanguage = value!);
-            },
-          ),
-          _buildDropdownTile(
-            icon: Icons.palette_outlined,
-            title: 'Theme',
-            subtitle: 'Choose app appearance',
-            value: _selectedTheme,
-            items: ['Light', 'Dark', 'System'],
-            onChanged: (value) {
-              setState(() => _selectedTheme = value!);
-            },
-          ),
-        ],
+    return _buildSection('App Preferences', [
+      _buildDropdownTile(
+        icon: Icons.language,
+        title: 'Language',
+        subtitle: 'Choose your preferred language',
+        value: _selectedLanguage,
+        items: ['English', 'Spanish', 'French', 'German', 'Chinese'],
+        onChanged: (value) async {
+          setState(() => _selectedLanguage = value!);
+          await _updateAppPreferences();
+        },
       ),
-    );
+      _buildDropdownTile(
+        icon: Icons.palette_outlined,
+        title: 'Theme',
+        subtitle: 'Choose app appearance',
+        value: _selectedTheme,
+        items: ['Light', 'Dark', 'System'],
+        onChanged: (value) async {
+          setState(() => _selectedTheme = value!);
+          await _updateAppPreferences();
+        },
+      ),
+    ]);
   }
 
   Widget _buildPrivacySettings() {
-    return SimpleCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Privacy & Security',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: SimpleTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            icon: Icons.security,
-            title: 'Privacy Policy',
-            subtitle: 'Read our privacy policy',
-            onTap: _showPrivacyPolicy,
-          ),
-          _buildSettingsTile(
-            icon: Icons.shield_outlined,
-            title: 'Data & Privacy',
-            subtitle: 'Manage your data preferences',
-            onTap: _dataPrivacy,
-          ),
-          _buildSettingsTile(
-            icon: Icons.download_outlined,
-            title: 'Export Data',
-            subtitle: 'Download your account data',
-            onTap: _exportData,
-          ),
-        ],
+    return _buildSection('Privacy & Security', [
+      _buildSwitchTile(
+        icon: Icons.location_on_outlined,
+        title: 'Location Services',
+        subtitle: 'Allow app to access your location',
+        value: _locationEnabled,
+        onChanged: (value) async {
+          setState(() => _locationEnabled = value);
+          await _updatePrivacySettings();
+        },
       ),
-    );
+      _buildSwitchTile(
+        icon: Icons.fingerprint,
+        title: 'Biometric Authentication',
+        subtitle: 'Use fingerprint or face unlock',
+        value: _biometricEnabled,
+        onChanged: (value) async {
+          setState(() => _biometricEnabled = value);
+          await _updatePrivacySettings();
+        },
+      ),
+      _buildSettingsTile(
+        icon: Icons.security,
+        title: 'Privacy Policy',
+        subtitle: 'Read our privacy policy',
+        onTap: _showPrivacyPolicy,
+      ),
+      _buildSettingsTile(
+        icon: Icons.download_outlined,
+        title: 'Export Data',
+        subtitle: 'Download your account data',
+        onTap: _exportData,
+      ),
+    ]);
   }
 
   Widget _buildAboutSection() {
-    return SimpleCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'About & Support',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: SimpleTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            icon: Icons.help_outline,
-            title: 'Help & Support',
-            subtitle: 'Get help or contact support',
-            onTap: _helpSupport,
-          ),
-          _buildSettingsTile(
-            icon: Icons.info_outline,
-            title: 'About CivicLink',
-            subtitle: 'App version and information',
-            onTap: _aboutApp,
-          ),
-          _buildSettingsTile(
-            icon: Icons.rate_review_outlined,
-            title: 'Rate App',
-            subtitle: 'Rate CivicLink on app store',
-            onTap: _rateApp,
-          ),
-        ],
+    return _buildSection('About & Support', [
+      _buildSettingsTile(
+        icon: Icons.help_outline,
+        title: 'Help & Support',
+        subtitle: 'Get help or contact support',
+        onTap: _helpSupport,
       ),
-    );
+      _buildSettingsTile(
+        icon: Icons.info_outline,
+        title: 'About CivicLink',
+        subtitle: 'App version and information',
+        onTap: _aboutApp,
+      ),
+      _buildSettingsTile(
+        icon: Icons.rate_review_outlined,
+        title: 'Rate App',
+        subtitle: 'Rate CivicLink on app store',
+        onTap: _rateApp,
+      ),
+      _buildSettingsTile(
+        icon: Icons.share_outlined,
+        title: 'Share App',
+        subtitle: 'Share CivicLink with friends',
+        onTap: _shareApp,
+      ),
+    ]);
   }
 
   Widget _buildDangerZone() {
-    return SimpleCard(
-      color: SimpleTheme.error.withOpacity(0.05),
+    return ModernCard(
+      color: ModernTheme.error.withOpacity(0.05),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Danger Zone',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: SimpleTheme.error,
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: ModernTheme.errorGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.warning, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Danger Zone',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.error,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           _buildSettingsTile(
@@ -399,15 +554,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: 'Sign Out',
             subtitle: 'Sign out of your account',
             onTap: _signOut,
-            textColor: SimpleTheme.error,
+            textColor: ModernTheme.error,
           ),
           _buildSettingsTile(
             icon: Icons.delete_forever,
             title: 'Delete Account',
             subtitle: 'Permanently delete your account',
             onTap: _deleteAccount,
-            textColor: SimpleTheme.error,
+            textColor: ModernTheme.error,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSection(String title, List<Widget> children) {
+    return ModernCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: ModernTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.settings,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...children,
         ],
       ),
     );
@@ -421,21 +613,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Color? textColor,
   }) {
     return ListTile(
-      leading: Icon(icon, color: textColor ?? SimpleTheme.primaryBlue),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: (textColor ?? ModernTheme.primaryBlue).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          color: textColor ?? ModernTheme.primaryBlue,
+          size: 20,
+        ),
+      ),
       title: Text(
         title,
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: textColor ?? SimpleTheme.textPrimary,
+          color: textColor ?? ModernTheme.textPrimary,
         ),
       ),
       subtitle: Text(subtitle),
       trailing: Icon(
         Icons.arrow_forward_ios,
         size: 16,
-        color: textColor ?? SimpleTheme.textSecondary,
+        color: textColor ?? ModernTheme.textSecondary,
       ),
       onTap: onTap,
+      contentPadding: EdgeInsets.zero,
     );
   }
 
@@ -447,14 +651,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required ValueChanged<bool> onChanged,
   }) {
     return ListTile(
-      leading: Icon(icon, color: SimpleTheme.primaryBlue),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: ModernTheme.primaryBlue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: ModernTheme.primaryBlue, size: 20),
+      ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(subtitle),
       trailing: Switch(
         value: value,
         onChanged: onChanged,
-        activeColor: SimpleTheme.primaryBlue,
+        activeColor: ModernTheme.primaryBlue,
       ),
+      contentPadding: EdgeInsets.zero,
     );
   }
 
@@ -467,17 +679,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required ValueChanged<String?> onChanged,
   }) {
     return ListTile(
-      leading: Icon(icon, color: SimpleTheme.primaryBlue),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: ModernTheme.primaryBlue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: ModernTheme.primaryBlue, size: 20),
+      ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(subtitle),
-      trailing: DropdownButton<String>(
-        value: value,
-        onChanged: onChanged,
-        items:
-            items.map((String item) {
-              return DropdownMenuItem<String>(value: item, child: Text(item));
-            }).toList(),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          border: Border.all(color: ModernTheme.primaryBlue.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: DropdownButton<String>(
+          value: value,
+          onChanged: onChanged,
+          underline: const SizedBox(),
+          style: const TextStyle(color: ModernTheme.textPrimary, fontSize: 14),
+          items:
+              items.map((String item) {
+                return DropdownMenuItem<String>(value: item, child: Text(item));
+              }).toList(),
+        ),
       ),
+      contentPadding: EdgeInsets.zero,
     );
   }
 
@@ -491,7 +720,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _emailPreferences() {
-    Helpers.showSnackBar(context, 'Email preferences feature coming soon!');
+    _showEmailPreferencesDialog();
   }
 
   void _showPrivacyPolicy() {
@@ -499,23 +728,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'Privacy Policy',
       'This is where the privacy policy content would be displayed. '
           'In a real app, this would show the full privacy policy text or '
-          'open a web view with the privacy policy URL.',
+          'open a web view with the privacy policy URL.\n\n'
+          'Your privacy is important to us. We collect only the necessary '
+          'information to provide our services and never share your personal '
+          'data with third parties without your consent.',
     );
-  }
-
-  void _dataPrivacy() {
-    Helpers.showSnackBar(context, 'Data privacy settings coming soon!');
   }
 
   void _exportData() {
     _showDialog(
       'Export Data',
       'Your data export will be prepared and sent to your email address. '
-          'This may take a few minutes to process.',
+          'This may take a few minutes to process.\n\n'
+          'The export will include:\n'
+          '• Profile information\n'
+          '• Reported issues\n'
+          '• App settings\n'
+          '• Activity history',
       showActions: true,
       confirmText: 'Export',
-      onConfirm: () {
-        Helpers.showSnackBar(context, 'Data export initiated!');
+      onConfirm: () async {
+        try {
+          final settings = _settingsService.exportSettings();
+          _showSuccessSnackBar('Data export initiated! Check your email.');
+        } catch (e) {
+          _showErrorSnackBar('Failed to export data: $e');
+        }
       },
     );
   }
@@ -523,9 +761,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _helpSupport() {
     _showDialog(
       'Help & Support',
-      'For support, please contact us at:\n\n'
-          'Email: support@civiclink.com\n'
-          'Phone: +1 (555) 123-4567\n\n'
+      'Need help? We\'re here for you!\n\n'
+          '📧 Email: support@civiclink.com\n'
+          '📞 Phone: +1 (555) 123-4567\n'
+          '🌐 Website: www.civiclink.com\n\n'
+          'Business Hours:\n'
+          'Monday - Friday: 9:00 AM - 6:00 PM\n'
+          'Saturday: 10:00 AM - 4:00 PM\n'
+          'Sunday: Closed\n\n'
           'You can also visit our website for FAQs and documentation.',
     );
   }
@@ -534,22 +777,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _showDialog(
       'About CivicLink',
       'CivicLink v1.0.0\n\n'
-          'Report. Track. Resolve.\n\n'
+          '🏛️ Report. Track. Resolve.\n\n'
           'CivicLink helps citizens report community issues and track their resolution. '
-          'Built with Flutter and Firebase.\n\n'
-          '© 2025 CivicLink Team',
+          'Built with Flutter and Firebase for a seamless experience.\n\n'
+          '✨ Features:\n'
+          '• Report community issues\n'
+          '• Track issue status\n'
+          '• Location-based mapping\n'
+          '• Real-time notifications\n'
+          '• Admin dashboard\n\n'
+          '© 2025 CivicLink Team\n'
+          'Made with ❤️ for better communities',
     );
   }
 
   void _rateApp() {
     _showDialog(
       'Rate CivicLink',
-      'Thank you for using CivicLink! Your feedback helps us improve. '
-          'Would you like to rate us on the app store?',
+      '⭐ Enjoying CivicLink?\n\n'
+          'Your feedback helps us improve and reach more communities! '
+          'Would you like to rate us on the app store?\n\n'
+          'It only takes a minute and really helps other users discover our app.',
       showActions: true,
       confirmText: 'Rate Now',
       onConfirm: () {
-        Helpers.showSnackBar(context, 'Redirecting to app store...');
+        _showSuccessSnackBar('Redirecting to app store...');
+      },
+    );
+  }
+
+  void _shareApp() {
+    _showDialog(
+      'Share CivicLink',
+      '📢 Help spread the word!\n\n'
+          'Share CivicLink with your friends and family to help build '
+          'stronger communities together.\n\n'
+          '\"Check out CivicLink - an amazing app for reporting and tracking '
+          'community issues! Download it now and help make our neighborhood better.\"',
+      showActions: true,
+      confirmText: 'Share',
+      onConfirm: () {
+        _showSuccessSnackBar('Opening share dialog...');
       },
     );
   }
@@ -557,11 +825,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _signOut() async {
     _showDialog(
       'Sign Out',
-      'Are you sure you want to sign out of your account?',
+      '👋 Are you sure you want to sign out?\n\n'
+          'You can always sign back in anytime to continue reporting '
+          'and tracking community issues.',
       showActions: true,
       confirmText: 'Sign Out',
       onConfirm: () async {
         try {
+          setState(() => _isUpdating = true);
           await _authService.signOut();
           Navigator.pushNamedAndRemoveUntil(
             context,
@@ -569,11 +840,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             (route) => false,
           );
         } catch (e) {
-          Helpers.showSnackBar(
-            context,
-            'Failed to sign out: $e',
-            isError: true,
-          );
+          setState(() => _isUpdating = false);
+          _showErrorSnackBar('Failed to sign out: $e');
         }
       },
     );
@@ -582,7 +850,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _deleteAccount() {
     _showDialog(
       'Delete Account',
-      'This action cannot be undone. All your data will be permanently deleted. '
+      '⚠️ This action cannot be undone!\n\n'
+          'Deleting your account will permanently remove:\n'
+          '• Your profile information\n'
+          '• All reported issues\n'
+          '• App settings and preferences\n'
+          '• Activity history\n\n'
           'Are you absolutely sure you want to delete your account?',
       showActions: true,
       confirmText: 'Delete Account',
@@ -590,13 +863,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onConfirm: () {
         _showDialog(
           'Account Deletion',
-          'Account deletion feature is not yet implemented. '
-              'Please contact support for account deletion requests.',
+          'Account deletion is a permanent action. To proceed, please contact our support team at support@civiclink.com with your deletion request.\n\n'
+              'We\'ll process your request within 48 hours and send you a confirmation email.',
         );
       },
     );
   }
 
+  // Dialog Methods
   void _showEditProfileDialog() {
     final nameController = TextEditingController(text: _userData?.fullName);
     final emailController = TextEditingController(text: _userData?.email);
@@ -605,6 +879,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text('Edit Profile'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -614,6 +891,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Full Name',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -622,8 +900,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email),
+                    helperText: 'Email cannot be changed',
                   ),
-                  enabled: false, // Email usually can't be changed
+                  enabled: false,
                 ),
               ],
             ),
@@ -635,10 +915,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  Helpers.showSnackBar(
-                    context,
-                    'Profile updated successfully!',
-                  );
+                  _showSuccessSnackBar('Profile updated successfully!');
                 },
                 child: const Text('Save'),
               ),
@@ -656,6 +933,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text('Change Password'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -665,6 +945,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Current Password',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock),
                   ),
                   obscureText: true,
                 ),
@@ -674,6 +955,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: const InputDecoration(
                     labelText: 'New Password',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock_outline),
                   ),
                   obscureText: true,
                 ),
@@ -683,6 +965,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Confirm New Password',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock_outline),
                   ),
                   obscureText: true,
                 ),
@@ -696,14 +979,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  Helpers.showSnackBar(
-                    context,
-                    'Password changed successfully!',
-                  );
+                  _showSuccessSnackBar('Password changed successfully!');
                 },
                 child: const Text('Change Password'),
               ),
             ],
+          ),
+    );
+  }
+
+  void _showEmailPreferencesDialog() {
+    bool issueUpdates = true;
+    bool weeklyDigest = false;
+    bool promotionalEmails = false;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setState) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Text('Email Preferences'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SwitchListTile(
+                        title: const Text('Issue Updates'),
+                        subtitle: const Text(
+                          'Get notified about your reported issues',
+                        ),
+                        value: issueUpdates,
+                        onChanged:
+                            (value) => setState(() => issueUpdates = value),
+                      ),
+                      SwitchListTile(
+                        title: const Text('Weekly Digest'),
+                        subtitle: const Text('Summary of community activities'),
+                        value: weeklyDigest,
+                        onChanged:
+                            (value) => setState(() => weeklyDigest = value),
+                      ),
+                      SwitchListTile(
+                        title: const Text('Promotional Emails'),
+                        subtitle: const Text('News and feature updates'),
+                        value: promotionalEmails,
+                        onChanged:
+                            (value) =>
+                                setState(() => promotionalEmails = value),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showSuccessSnackBar('Email preferences updated!');
+                      },
+                      child: const Text('Save'),
+                    ),
+                  ],
+                ),
           ),
     );
   }
@@ -720,6 +1062,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder:
           (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: Text(title),
             content: Text(content),
             actions: [
@@ -736,7 +1081,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style:
                       isDestructive
                           ? ElevatedButton.styleFrom(
-                            backgroundColor: SimpleTheme.error,
+                            backgroundColor: ModernTheme.error,
+                            foregroundColor: Colors.white,
                           )
                           : null,
                   child: Text(confirmText),
@@ -749,6 +1095,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ],
           ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
     );
   }
 }
