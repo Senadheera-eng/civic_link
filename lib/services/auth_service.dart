@@ -75,6 +75,39 @@ class AuthService {
     }
   }
 
+  Future<bool> testFirebaseConnection() async {
+    try {
+      print("🧪 Testing Firebase connection...");
+
+      // Test Firestore connection
+      await _firestore
+          .collection('test')
+          .doc('connection_test')
+          .set({'timestamp': FieldValue.serverTimestamp()})
+          .timeout(Duration(seconds: 10));
+
+      print("✅ Firebase Firestore connection successful");
+
+      // Clean up test document
+      await _firestore.collection('test').doc('connection_test').delete();
+
+      return true;
+    } catch (e) {
+      print("❌ Firebase connection test failed: $e");
+      return false;
+    }
+  }
+
+  Future<void> checkFirebaseStatus() async {
+    final isConnected = await testFirebaseConnection();
+    if (!isConnected) {
+      // Show user-friendly error message
+      print(
+        "🌐 Firebase is not accessible. Please check your internet connection.",
+      );
+    }
+  }
+
   Future<UserCredential?> registerWithEmail(
     String email,
     String password,
@@ -101,6 +134,7 @@ class AuthService {
         }
 
         // Check if employee ID already exists
+        print("🔍 Checking if Employee ID already exists...");
         final existingEmployee =
             await _firestore
                 .collection('users')
@@ -111,8 +145,10 @@ class AuthService {
         if (existingEmployee.docs.isNotEmpty) {
           throw 'This Employee ID is already registered';
         }
+        print("✅ Employee ID is unique");
       }
 
+      print("🔥 Creating Firebase user account...");
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
@@ -123,6 +159,7 @@ class AuthService {
       print("🆔 User UID: ${result.user?.uid}");
 
       // Create user document in Firestore
+      print("📄 Creating user document in Firestore...");
       await _createUserDocument(
         result.user!,
         fullName,
@@ -131,14 +168,32 @@ class AuthService {
         employeeId: employeeId,
       );
 
+      print("✅ User document created successfully");
+
       // Send welcome notification
-      await NotificationService().sendWelcomeNotification(result.user!.uid);
+      print("🔔 Sending welcome notification...");
+      try {
+        await NotificationService().sendWelcomeNotification(result.user!.uid);
+        print("✅ Welcome notification sent");
+      } catch (e) {
+        print("⚠️ Failed to send welcome notification: $e");
+      }
 
       // Send department-specific welcome for officials
       if (userType == 'official' && department != null) {
-        await _sendDepartmentWelcomeNotification(result.user!.uid, department);
+        print("🏢 Sending department welcome notification...");
+        try {
+          await _sendDepartmentWelcomeNotification(
+            result.user!.uid,
+            department,
+          );
+          print("✅ Department welcome notification sent");
+        } catch (e) {
+          print("⚠️ Failed to send department welcome notification: $e");
+        }
       }
 
+      print("🎉 Registration process completed successfully!");
       return result;
     } on FirebaseAuthException catch (e) {
       print("❌ Registration FirebaseAuthException:");
@@ -205,6 +260,174 @@ class AuthService {
     }
   }
 
+  Future<void> _createUserDocument(
+    User user,
+    String fullName,
+    String userType, {
+    String? department,
+    String? employeeId,
+  }) async {
+    try {
+      print("📄 Creating user document for ${user.email}");
+
+      // Add retry mechanism for network issues
+      int retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
+        try {
+          // Check if document already exists
+          final userDoc = await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .get()
+              .timeout(Duration(seconds: 10)); // Add timeout
+
+          if (!userDoc.exists) {
+            // Create basic user data
+            final userData = <String, dynamic>{
+              'uid': user.uid,
+              'email': user.email ?? '',
+              'fullName': fullName,
+              'userType': userType,
+              'createdAt': FieldValue.serverTimestamp(),
+              'profilePicture': user.photoURL ?? '',
+              'isActive': true,
+            };
+
+            // Add fields based on user type
+            if (userType == 'official') {
+              userData['department'] = department ?? '';
+              userData['employeeId'] = employeeId ?? '';
+              userData['isVerified'] = false;
+              print("🏢 Added official-specific fields");
+            } else {
+              userData['isVerified'] = true;
+              print("👤 Set as verified citizen");
+            }
+
+            print("💾 Saving user document to Firestore...");
+            await _firestore
+                .collection('users')
+                .doc(user.uid)
+                .set(userData)
+                .timeout(Duration(seconds: 10));
+
+            print("✅ User document created successfully");
+            return; // Success, exit retry loop
+          } else {
+            print("ℹ️ User document already exists, skipping creation");
+            return; // Document exists, exit retry loop
+          }
+        } catch (e) {
+          retryCount++;
+          print("❌ Attempt $retryCount failed: $e");
+
+          if (retryCount >= maxRetries) {
+            throw e; // Max retries reached, throw the error
+          }
+
+          // Wait before retry
+          await Future.delayed(Duration(seconds: retryCount * 2));
+          print("🔄 Retrying... (attempt ${retryCount + 1}/$maxRetries)");
+        }
+      }
+    } catch (e) {
+      print("❌ Error creating user document after retries: $e");
+      print("❌ Full error details: ${e.toString()}");
+
+      // Check if it's a network/availability error
+      if (e.toString().contains('unavailable') ||
+          e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        throw 'Network error: Please check your internet connection and try again';
+      } else {
+        throw 'Failed to create user profile: ${e.toString()}';
+      }
+    }
+  }
+
+  // Enhanced getUserData with retry mechanism
+  Future<UserModel?> getUserData() async {
+    final user = currentUser;
+    print("📋 AuthService: Getting user data for ${user?.email ?? 'null'}");
+
+    if (user == null) {
+      print("❌ No current user found");
+      return null;
+    }
+
+    try {
+      // Add retry mechanism
+      int retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
+        try {
+          DocumentSnapshot doc = await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .get()
+              .timeout(Duration(seconds: 10));
+
+          if (doc.exists) {
+            print("✅ User document found in Firestore");
+            final userData = UserModel.fromFirestore(doc);
+            print("👤 User data loaded:");
+            print("   Name: ${userData.fullName}");
+            print("   Type: ${userData.userType}");
+            print("   Department: ${userData.department ?? 'N/A'}");
+            print("   Verified: ${userData.isVerified}");
+
+            return userData;
+          } else {
+            print("⚠️ User document not found in Firestore, creating default");
+            // Return default user model if Firestore doc doesn't exist
+            final defaultUser = UserModel(
+              uid: user.uid,
+              email: user.email ?? '',
+              fullName: user.displayName ?? 'User',
+              userType: 'citizen',
+              isVerified: true,
+            );
+
+            return defaultUser;
+          }
+        } catch (e) {
+          retryCount++;
+          print("❌ Get user data attempt $retryCount failed: $e");
+
+          if (retryCount >= maxRetries) {
+            throw e;
+          }
+
+          await Future.delayed(Duration(seconds: retryCount * 2));
+          print(
+            "🔄 Retrying getUserData... (attempt ${retryCount + 1}/$maxRetries)",
+          );
+        }
+      }
+    } catch (e) {
+      print("❌ Error getting user data after retries: $e");
+
+      // Return a default user model for network errors
+      if (e.toString().contains('unavailable') ||
+          e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print("🌐 Network error - returning default user");
+        return UserModel(
+          uid: user.uid,
+          email: user.email ?? '',
+          fullName: user.displayName ?? 'User',
+          userType: 'citizen',
+          isVerified: true,
+        );
+      }
+
+      return null;
+    }
+  }
+
   Future<void> signOut() async {
     try {
       print("🔐 AuthService: Starting sign out process");
@@ -231,107 +454,6 @@ class AuthService {
     } catch (e) {
       print("❌ Sign out error: $e");
       throw 'Sign out failed: ${e.toString()}';
-    }
-  }
-
-  Future<UserModel?> getUserData() async {
-    final user = currentUser;
-    print("📋 AuthService: Getting user data for ${user?.email ?? 'null'}");
-
-    if (user == null) {
-      print("❌ No current user found");
-      return null;
-    }
-
-    try {
-      DocumentSnapshot doc =
-          await _firestore.collection('users').doc(user.uid).get();
-
-      if (doc.exists) {
-        print("✅ User document found in Firestore");
-        final userData = UserModel.fromFirestore(doc);
-        print("👤 User data: ${userData.fullName} (${userData.userType})");
-        if (userData.department != null)
-          print("🏢 Department: ${userData.department}");
-        return userData;
-      } else {
-        print("⚠️ User document not found in Firestore, creating default");
-        // Return default user model if Firestore doc doesn't exist
-        final defaultUser = UserModel(
-          uid: user.uid,
-          email: user.email ?? '',
-          fullName: user.displayName ?? 'User',
-          userType: 'citizen',
-        );
-
-        // Try to create the document
-        try {
-          await _createUserDocument(
-            user,
-            defaultUser.fullName,
-            defaultUser.userType,
-          );
-        } catch (e) {
-          print("⚠️ Failed to create user document: $e");
-        }
-
-        return defaultUser;
-      }
-    } catch (e) {
-      print("❌ Error getting user data: $e");
-      return null;
-    }
-  }
-
-  Future<void> _createUserDocument(
-    User user,
-    String fullName,
-    String userType, {
-    String? department,
-    String? employeeId,
-  }) async {
-    try {
-      print("📄 Creating user document for ${user.email}");
-
-      final userDoc = await _firestore.collection('users').doc(user.uid).get();
-
-      if (!userDoc.exists) {
-        final userData = {
-          'uid': user.uid,
-          'email': user.email,
-          'fullName': fullName,
-          'userType': userType,
-          'createdAt': FieldValue.serverTimestamp(),
-          'profilePicture': user.photoURL ?? '',
-          'isVerified': false,
-          'isActive': true,
-        };
-
-        // Add department-specific fields for officials
-        if (userType == 'official') {
-          userData['department'] = department;
-          userData['employeeId'] = employeeId;
-          userData['isVerified'] = false; // Officials need verification
-        }
-
-        await _firestore.collection('users').doc(user.uid).set(userData);
-        print("✅ User document created successfully");
-
-        // Log official registration for admin review
-        if (userType == 'official') {
-          await _logOfficialRegistration(
-            user.uid,
-            fullName,
-            department!,
-            employeeId!,
-          );
-        }
-      } else {
-        print("ℹ️ User document already exists");
-      }
-    } catch (e) {
-      print("❌ Error creating user document: $e");
-      // Don't throw here - login can succeed even if Firestore fails
     }
   }
 

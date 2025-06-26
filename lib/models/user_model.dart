@@ -73,7 +73,7 @@ class UserModel {
   }
 
   // Role checking methods
-  bool get isAdmin => userType == 'admin';
+  bool get isAdmin => false; // Remove admin functionality
   bool get isCitizen => userType == 'citizen';
   bool get isOfficial => userType == 'official';
 
@@ -82,14 +82,11 @@ class UserModel {
 
   String get displayRole {
     switch (userType) {
-      case 'admin':
-        return 'System Administrator';
       case 'official':
         return hasDepartment ? '$department Official' : 'Government Official';
       case 'citizen':
-        return 'Citizen';
       default:
-        return 'User';
+        return 'Citizen';
     }
   }
 
@@ -154,10 +151,10 @@ class UserModel {
   }
 
   // Validation methods
-  bool get canManageIssues => isAdmin || (isOfficial && isVerified);
-  bool get canReportIssues => isCitizen || isOfficial || isAdmin;
-  bool get canViewAllIssues => isAdmin;
-  bool get canVerifyAccounts => isAdmin;
+  bool get canManageIssues => isOfficial && isVerified;
+  bool get canReportIssues => true; // Both citizens and officials can report
+  bool get canViewAllIssues => false; // Remove admin-only features
+  bool get canVerifyAccounts => false;
 
   // Check if user can manage issues in a specific category
   bool canManageCategory(String category) {
@@ -178,13 +175,6 @@ class UserModel {
 
   // Get verification badge info
   Map<String, dynamic> get verificationBadge {
-    if (isAdmin) {
-      return {
-        'text': 'ADMIN',
-        'color': 0xFFDC2626, // Red
-        'icon': 'admin_panel_settings',
-      };
-    }
     if (isOfficial && isVerified) {
       return {
         'text': 'VERIFIED',
