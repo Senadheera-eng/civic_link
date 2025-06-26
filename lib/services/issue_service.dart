@@ -354,4 +354,208 @@ class IssueService {
                   .toList(),
         );
   }
+
+  // Add these methods to your existing issue_service.dart
+
+  // Get issues by department (for officials)
+  Future<List<IssueModel>> getIssuesByDepartment(String department) async {
+    try {
+      print("🏢 Getting issues for department: $department");
+
+      final querySnapshot =
+          await _firestore
+              .collection('issues')
+              .where('category', isEqualTo: department)
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      final issues =
+          querySnapshot.docs
+              .map((doc) => IssueModel.fromFirestore(doc))
+              .toList();
+
+      print("✅ Found ${issues.length} issues for $department department");
+      return issues;
+    } catch (e) {
+      print("❌ Error getting department issues: $e");
+      throw 'Failed to get department issues: $e';
+    }
+  }
+
+  // Stream of department issues for real-time updates
+  Stream<List<IssueModel>> getDepartmentIssuesStream(String department) {
+    return _firestore
+        .collection('issues')
+        .where('category', isEqualTo: department)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs
+                  .map((doc) => IssueModel.fromFirestore(doc))
+                  .toList(),
+        );
+  }
+
+  // Get department statistics
+  Future<Map<String, int>> getDepartmentStatistics(String department) async {
+    try {
+      final issues = await getIssuesByDepartment(department);
+      final now = DateTime.now();
+      final weekAgo = now.subtract(const Duration(days: 7));
+      final monthAgo = now.subtract(const Duration(days: 30));
+
+      return {
+        'total': issues.length,
+        'pending':
+            issues.where((i) => i.status.toLowerCase() == 'pending').length,
+        'in_progress':
+            issues.where((i) => i.status.toLowerCase() == 'in_progress').length,
+        'resolved':
+            issues.where((i) => i.status.toLowerCase() == 'resolved').length,
+        'this_week': issues.where((i) => i.createdAt.isAfter(weekAgo)).length,
+        'this_month': issues.where((i) => i.createdAt.isAfter(monthAgo)).length,
+      };
+    } catch (e) {
+      print("❌ Error getting department statistics: $e");
+      return {};
+    }
+  }
+
+  // Assign issue to specific official (admin/department head function)
+  Future<void> assignIssue({
+    required String issueId,
+    required String assignedToId,
+    required String assignedToName,
+    String? notes,
+  }) async {
+    try {
+      await _firestore.collection('issues').doc(issueId).update({
+        'assignedTo': assignedToId,
+        'assignedToName': assignedToName,
+        'assignedAt': FieldValue.serverTimestamp(),
+        'assignmentNotes': notes,
+        'status': 'in_progress', // Auto-set to in progress when assigned
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Get issue details to send notification
+      final issueDoc = await _firestore.collection('issues').doc(issueId).get();
+      if (issueDoc.exists) {
+        final issueData = issueDoc.data() as Map<String, dynamic>;
+
+        // Notify the citizen about assignment
+        await NotificationService().sendIssueUpdateNotification(
+          userId: issueData['userId'],
+          issueId: issueId,
+          issueTitle: issueData['title'],
+          newStatus: 'in_progress',
+          adminNotes: 'Issue has been assigned to $assignedToName',
+        );
+
+        // Notify the assigned official
+        await NotificationService().sendNotificationToUser(
+          userId: assignedToId,
+          title: '📋 New Assignment',
+          body: 'You have been assigned issue: ${issueData['title']}',
+          data: {
+            'type': 'issue_assigned',
+            'issueId': issueId,
+            'priority': issueData['priority'] ?? 'medium',
+          },
+        );
+      }
+
+      print("✅ Issue assigned successfully");
+    } catch (e) {
+      print("❌ Error assigning issue: $e");
+      throw 'Failed to assign issue: $e';
+    }
+  }
+
+  // Get assigned issues for an official
+  Future<List<IssueModel>> getAssignedIssues(String officialId) async {
+    try {
+      final querySnapshot =
+          await _firestore
+              .collection('issues')
+              .where('assignedTo', isEqualTo: officialId)
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      return querySnapshot.docs
+          .map((doc) => IssueModel.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print("❌ Error getting assigned issues: $e");
+      throw 'Failed to get assigned issues: $e';
+    }
+  }
+
+  // Bulk update issues (for department officials)
+  Future<void> bulkUpdateIssues({
+    required List<String> issueIds,
+    String? newStatus,
+    String? notes,
+  }) async {
+    try {
+      final batch = _firestore.batch();
+
+      for (String issueId in issueIds) {
+        final issueRef = _firestore.collection('issues').doc(issueId);
+        final updateData = <String, dynamic>{
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        if (newStatus != null) updateData['status'] = newStatus;
+        if (notes != null) updateData['adminNotes'] = notes;
+
+        batch.update(issueRef, updateData);
+      }
+
+      await batch.commit();
+
+      // Send notifications for each updated issue
+      for (String issueId in issueIds) {
+        final issueDoc =
+            await _firestore.collection('issues').doc(issueId).get();
+        if (issueDoc.exists && newStatus != null) {
+          final issueData = issueDoc.data() as Map<String, dynamic>;
+          await NotificationService().sendIssueUpdateNotification(
+            userId: issueData['userId'],
+            issueId: issueId,
+            issueTitle: issueData['title'],
+            newStatus: newStatus,
+            adminNotes: notes,
+          );
+        }
+      }
+
+      print("✅ Bulk update completed for ${issueIds.length} issues");
+    } catch (e) {
+      print("❌ Error in bulk update: $e");
+      throw 'Failed to bulk update issues: $e';
+    }
+  }
+
+  // Get issues requiring attention (high priority + pending)
+  Future<List<IssueModel>> getUrgentIssues(String department) async {
+    try {
+      final querySnapshot =
+          await _firestore
+              .collection('issues')
+              .where('category', isEqualTo: department)
+              .where('priority', whereIn: ['High', 'Critical'])
+              .where('status', isEqualTo: 'pending')
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      return querySnapshot.docs
+          .map((doc) => IssueModel.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print("❌ Error getting urgent issues: $e");
+      return [];
+    }
+  }
 }
