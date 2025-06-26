@@ -1,6 +1,5 @@
-// services/enhanced_settings_service.dart
+// services/settings_service.dart (FINAL FIXED VERSION)
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService extends ChangeNotifier {
@@ -19,8 +18,7 @@ class SettingsService extends ChangeNotifier {
   bool _pushNotifications = true;
   bool _locationEnabled = false;
   String _selectedLanguage = 'English';
-  String _selectedTheme = 'Light';
-  bool _darkMode = false;
+  bool _isDarkMode = false;
   bool _biometricEnabled = false;
 
   // Email preferences
@@ -39,8 +37,7 @@ class SettingsService extends ChangeNotifier {
   bool get pushNotifications => _pushNotifications;
   bool get locationEnabled => _locationEnabled;
   String get selectedLanguage => _selectedLanguage;
-  String get selectedTheme => _selectedTheme;
-  bool get darkMode => _darkMode;
+  bool get isDarkMode => _isDarkMode;
   bool get biometricEnabled => _biometricEnabled;
   bool get issueUpdates => _issueUpdates;
   bool get weeklyDigest => _weeklyDigest;
@@ -48,6 +45,17 @@ class SettingsService extends ChangeNotifier {
   bool get dataCollection => _dataCollection;
   bool get analyticsEnabled => _analyticsEnabled;
   bool get crashReporting => _crashReporting;
+
+  // Get locale for the app
+  String get localeCode {
+    switch (_selectedLanguage) {
+      case 'Sinhala':
+        return 'si_LK';
+      case 'English':
+      default:
+        return 'en_US';
+    }
+  }
 
   // Initialize settings (load from SharedPreferences)
   Future<void> initializeSettings() async {
@@ -61,8 +69,7 @@ class SettingsService extends ChangeNotifier {
       _pushNotifications = prefs.getBool('push_notifications') ?? true;
       _locationEnabled = prefs.getBool('location_enabled') ?? false;
       _selectedLanguage = prefs.getString('selected_language') ?? 'English';
-      _selectedTheme = prefs.getString('selected_theme') ?? 'Light';
-      _darkMode = prefs.getBool('dark_mode') ?? false;
+      _isDarkMode = prefs.getBool('is_dark_mode') ?? false;
       _biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
 
       // Email preferences
@@ -76,6 +83,10 @@ class SettingsService extends ChangeNotifier {
       _crashReporting = prefs.getBool('crash_reporting') ?? true;
 
       print("✅ SettingsService: Settings loaded successfully");
+      print("🌙 Dark mode: $_isDarkMode");
+      print("🌍 Language: $_selectedLanguage");
+
+      // Notify listeners that settings have been loaded
       notifyListeners();
     } catch (e) {
       print("❌ SettingsService: Failed to initialize settings: $e");
@@ -114,32 +125,32 @@ class SettingsService extends ChangeNotifier {
     }
   }
 
-  // Update app preferences
-  Future<void> updateAppPreferences({
-    String? language,
-    String? theme,
-    bool? darkMode,
-  }) async {
+  // Update app preferences with proper notification
+  Future<void> updateAppPreferences({String? language, bool? darkMode}) async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
+      bool shouldNotify = false;
 
-      if (language != null) {
+      if (language != null && language != _selectedLanguage) {
         _selectedLanguage = language;
         await prefs.setString('selected_language', language);
+        print("🌍 Language changed to: $language");
+        shouldNotify = true;
       }
 
-      if (theme != null) {
-        _selectedTheme = theme;
-        await prefs.setString('selected_theme', theme);
+      if (darkMode != null && darkMode != _isDarkMode) {
+        _isDarkMode = darkMode;
+        await prefs.setBool('is_dark_mode', darkMode);
+        print("🌙 Dark mode changed to: $darkMode");
+        shouldNotify = true;
       }
 
-      if (darkMode != null) {
-        _darkMode = darkMode;
-        await prefs.setBool('dark_mode', darkMode);
+      if (shouldNotify) {
+        print(
+          "✅ SettingsService: App preferences updated, notifying listeners",
+        );
+        notifyListeners();
       }
-
-      print("✅ SettingsService: App preferences updated");
-      notifyListeners();
     } catch (e) {
       print("❌ SettingsService: Failed to update app preferences: $e");
       rethrow;
@@ -190,71 +201,17 @@ class SettingsService extends ChangeNotifier {
     }
   }
 
-  // Update email preferences
-  Future<void> updateEmailPreferences({
-    bool? issueUpdates,
-    bool? weeklyDigest,
-    bool? promotionalEmails,
-  }) async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-
-      if (issueUpdates != null) {
-        _issueUpdates = issueUpdates;
-        await prefs.setBool('issue_updates', issueUpdates);
-      }
-
-      if (weeklyDigest != null) {
-        _weeklyDigest = weeklyDigest;
-        await prefs.setBool('weekly_digest', weeklyDigest);
-      }
-
-      if (promotionalEmails != null) {
-        _promotionalEmails = promotionalEmails;
-        await prefs.setBool('promotional_emails', promotionalEmails);
-      }
-
-      print("✅ SettingsService: Email preferences updated");
-      notifyListeners();
-    } catch (e) {
-      print("❌ SettingsService: Failed to update email preferences: $e");
-      rethrow;
-    }
+  // Force update theme
+  Future<void> toggleDarkMode() async {
+    await updateAppPreferences(darkMode: !_isDarkMode);
   }
 
-  // Reset all settings to defaults
-  Future<void> resetToDefaults() async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-
-      // Clear all settings
-      await prefs.clear();
-
-      // Reset to default values
-      _notificationsEnabled = true;
-      _emailNotifications = true;
-      _pushNotifications = true;
-      _locationEnabled = false;
-      _selectedLanguage = 'English';
-      _selectedTheme = 'Light';
-      _darkMode = false;
-      _biometricEnabled = false;
-      _issueUpdates = true;
-      _weeklyDigest = false;
-      _promotionalEmails = false;
-      _dataCollection = true;
-      _analyticsEnabled = true;
-      _crashReporting = true;
-
-      print("✅ SettingsService: Settings reset to defaults");
-      notifyListeners();
-    } catch (e) {
-      print("❌ SettingsService: Failed to reset settings: $e");
-      rethrow;
-    }
+  // Force update language
+  Future<void> changeLanguage(String language) async {
+    await updateAppPreferences(language: language);
   }
 
-  // Export settings as JSON (for data export feature)
+  // Export settings as JSON
   Map<String, dynamic> exportSettings() {
     return {
       'app_info': {
@@ -268,8 +225,7 @@ class SettingsService extends ChangeNotifier {
       },
       'app_preferences': {
         'selected_language': _selectedLanguage,
-        'selected_theme': _selectedTheme,
-        'dark_mode': _darkMode,
+        'is_dark_mode': _isDarkMode,
       },
       'privacy': {
         'location_enabled': _locationEnabled,
@@ -284,157 +240,5 @@ class SettingsService extends ChangeNotifier {
         'promotional_emails': _promotionalEmails,
       },
     };
-  }
-
-  // Import settings from JSON
-  Future<void> importSettings(Map<String, dynamic> settings) async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-
-      // Import notifications
-      if (settings['notifications'] != null) {
-        final notifications = settings['notifications'];
-        _notificationsEnabled = notifications['notifications_enabled'] ?? true;
-        _emailNotifications = notifications['email_notifications'] ?? true;
-        _pushNotifications = notifications['push_notifications'] ?? true;
-
-        await prefs.setBool('notifications_enabled', _notificationsEnabled);
-        await prefs.setBool('email_notifications', _emailNotifications);
-        await prefs.setBool('push_notifications', _pushNotifications);
-      }
-
-      // Import app preferences
-      if (settings['app_preferences'] != null) {
-        final appPrefs = settings['app_preferences'];
-        _selectedLanguage = appPrefs['selected_language'] ?? 'English';
-        _selectedTheme = appPrefs['selected_theme'] ?? 'Light';
-        _darkMode = appPrefs['dark_mode'] ?? false;
-
-        await prefs.setString('selected_language', _selectedLanguage);
-        await prefs.setString('selected_theme', _selectedTheme);
-        await prefs.setBool('dark_mode', _darkMode);
-      }
-
-      // Import privacy settings
-      if (settings['privacy'] != null) {
-        final privacy = settings['privacy'];
-        _locationEnabled = privacy['location_enabled'] ?? false;
-        _biometricEnabled = privacy['biometric_enabled'] ?? false;
-        _dataCollection = privacy['data_collection'] ?? true;
-        _analyticsEnabled = privacy['analytics_enabled'] ?? true;
-        _crashReporting = privacy['crash_reporting'] ?? true;
-
-        await prefs.setBool('location_enabled', _locationEnabled);
-        await prefs.setBool('biometric_enabled', _biometricEnabled);
-        await prefs.setBool('data_collection', _dataCollection);
-        await prefs.setBool('analytics_enabled', _analyticsEnabled);
-        await prefs.setBool('crash_reporting', _crashReporting);
-      }
-
-      // Import email preferences
-      if (settings['email_preferences'] != null) {
-        final emailPrefs = settings['email_preferences'];
-        _issueUpdates = emailPrefs['issue_updates'] ?? true;
-        _weeklyDigest = emailPrefs['weekly_digest'] ?? false;
-        _promotionalEmails = emailPrefs['promotional_emails'] ?? false;
-
-        await prefs.setBool('issue_updates', _issueUpdates);
-        await prefs.setBool('weekly_digest', _weeklyDigest);
-        await prefs.setBool('promotional_emails', _promotionalEmails);
-      }
-
-      print("✅ SettingsService: Settings imported successfully");
-      notifyListeners();
-    } catch (e) {
-      print("❌ SettingsService: Failed to import settings: $e");
-      rethrow;
-    }
-  }
-
-  // Get app version and info
-  Map<String, String> getAppInfo() {
-    return {
-      'version': '1.0.0',
-      'build': '100',
-      'release_date': '2025-01-01',
-      'platform': defaultTargetPlatform.name,
-    };
-  }
-
-  // Check if feature is enabled
-  bool isFeatureEnabled(String feature) {
-    switch (feature) {
-      case 'notifications':
-        return _notificationsEnabled;
-      case 'location':
-        return _locationEnabled;
-      case 'biometric':
-        return _biometricEnabled;
-      case 'analytics':
-        return _analyticsEnabled;
-      default:
-        return false;
-    }
-  }
-
-  // Get theme mode
-  ThemeMode getThemeMode() {
-    switch (_selectedTheme.toLowerCase()) {
-      case 'dark':
-        return ThemeMode.dark;
-      case 'light':
-        return ThemeMode.light;
-      case 'system':
-        return ThemeMode.system;
-      default:
-        return ThemeMode.light;
-    }
-  }
-
-  // Update single setting
-  Future<void> updateSingleSetting(String key, dynamic value) async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-
-      switch (key) {
-        case 'notifications_enabled':
-          _notificationsEnabled = value as bool;
-          await prefs.setBool(key, value);
-          break;
-        case 'email_notifications':
-          _emailNotifications = value as bool;
-          await prefs.setBool(key, value);
-          break;
-        case 'push_notifications':
-          _pushNotifications = value as bool;
-          await prefs.setBool(key, value);
-          break;
-        case 'location_enabled':
-          _locationEnabled = value as bool;
-          await prefs.setBool(key, value);
-          break;
-        case 'biometric_enabled':
-          _biometricEnabled = value as bool;
-          await prefs.setBool(key, value);
-          break;
-        case 'selected_language':
-          _selectedLanguage = value as String;
-          await prefs.setString(key, value);
-          break;
-        case 'selected_theme':
-          _selectedTheme = value as String;
-          await prefs.setString(key, value);
-          break;
-        default:
-          print("⚠️ Unknown setting key: $key");
-          return;
-      }
-
-      print("✅ SettingsService: Updated $key to $value");
-      notifyListeners();
-    } catch (e) {
-      print("❌ SettingsService: Failed to update $key: $e");
-      rethrow;
-    }
   }
 }

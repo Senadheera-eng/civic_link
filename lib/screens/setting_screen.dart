@@ -1,10 +1,12 @@
-// screens/settings_screen.dart (COMPLETE FINAL VERSION)
+// screens/settings_screen.dart (FIXED VERSION)
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import '../services/settings_service.dart';
 import '../models/user_model.dart';
 import '../theme/modern_theme.dart';
+import '../l10n/app_localizations.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -30,7 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _locationEnabled = false;
   bool _biometricEnabled = false;
   String _selectedLanguage = 'English';
-  String _selectedTheme = 'Light';
+  bool _isDarkMode = false;
 
   @override
   void initState() {
@@ -73,12 +75,48 @@ class _SettingsScreenState extends State<SettingsScreen>
         _locationEnabled = _settingsService.locationEnabled;
         _biometricEnabled = _settingsService.biometricEnabled;
         _selectedLanguage = _settingsService.selectedLanguage;
-        _selectedTheme = _settingsService.selectedTheme;
+        _isDarkMode = _settingsService.isDarkMode;
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
-      _showErrorSnackBar('Failed to load settings: $e');
+      _showErrorSnackBar(
+        AppLocalizations.of(context)?.failedToLoadSettings ??
+            'Failed to load settings: $e',
+      );
+    }
+  }
+
+  Future<void> _updateUserProfile(String newName) async {
+    setState(() => _isUpdating = true);
+
+    try {
+      // Update in Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_userData!.uid)
+          .update({'fullName': newName});
+
+      // Update local userData
+      setState(() {
+        _userData = UserModel(
+          uid: _userData!.uid,
+          email: _userData!.email,
+          fullName: newName,
+          userType: _userData!.userType,
+          profilePicture: _userData!.profilePicture,
+          createdAt: _userData!.createdAt,
+        );
+      });
+
+      _showSuccessSnackBar(
+        AppLocalizations.of(context)?.profileUpdatedSuccessfully ??
+            'Profile updated successfully!',
+      );
+    } catch (e) {
+      _showErrorSnackBar('Failed to update profile: $e');
+    } finally {
+      setState(() => _isUpdating = false);
     }
   }
 
@@ -91,9 +129,15 @@ class _SettingsScreenState extends State<SettingsScreen>
         emailNotifications: _emailNotifications,
         pushNotifications: _pushNotifications,
       );
-      _showSuccessSnackBar('Notification settings updated!');
+      _showSuccessSnackBar(
+        AppLocalizations.of(context)?.notificationSettingsUpdated ??
+            'Notification settings updated!',
+      );
     } catch (e) {
-      _showErrorSnackBar('Failed to update settings: $e');
+      _showErrorSnackBar(
+        AppLocalizations.of(context)?.failedToUpdateSettings ??
+            'Failed to update settings: $e',
+      );
     } finally {
       setState(() => _isUpdating = false);
     }
@@ -105,11 +149,26 @@ class _SettingsScreenState extends State<SettingsScreen>
     try {
       await _settingsService.updateAppPreferences(
         language: _selectedLanguage,
-        theme: _selectedTheme,
+        darkMode: _isDarkMode,
       );
-      _showSuccessSnackBar('App preferences updated!');
+      _showSuccessSnackBar(
+        AppLocalizations.of(context)?.appPreferencesUpdated ??
+            'App preferences updated!',
+      );
+
+      // Force app restart for immediate theme/language change
+      if (mounted) {
+        // Small delay to show the success message before restart
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/home', (route) => false);
+      }
     } catch (e) {
-      _showErrorSnackBar('Failed to update preferences: $e');
+      _showErrorSnackBar(
+        AppLocalizations.of(context)?.failedToUpdateSettings ??
+            'Failed to update preferences: $e',
+      );
     } finally {
       setState(() => _isUpdating = false);
     }
@@ -123,7 +182,10 @@ class _SettingsScreenState extends State<SettingsScreen>
         locationEnabled: _locationEnabled,
         biometricEnabled: _biometricEnabled,
       );
-      _showSuccessSnackBar('Privacy settings updated!');
+      _showSuccessSnackBar(
+        AppLocalizations.of(context)?.privacySettingsUpdated ??
+            'Privacy settings updated!',
+      );
     } catch (e) {
       _showErrorSnackBar('Failed to update privacy settings: $e');
     } finally {
@@ -133,21 +195,23 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     if (_isLoading) {
       return Scaffold(
         body: Container(
           decoration: const BoxDecoration(
             gradient: ModernTheme.primaryGradient,
           ),
-          child: const Center(
+          child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(color: Colors.white),
-                SizedBox(height: 24),
+                const CircularProgressIndicator(color: Colors.white),
+                const SizedBox(height: 24),
                 Text(
-                  'Loading Settings...',
-                  style: TextStyle(
+                  l10n?.loadingSettings ?? 'Loading Settings...',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
@@ -172,9 +236,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                 Expanded(
                   child: Container(
                     margin: const EdgeInsets.only(top: 16),
-                    decoration: const BoxDecoration(
-                      color: ModernTheme.background,
-                      borderRadius: BorderRadius.only(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(32),
                         topRight: Radius.circular(32),
                       ),
@@ -198,7 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           const SizedBox(height: 24),
                           _buildAboutSection(),
                           const SizedBox(height: 24),
-                          _buildDangerZone(),
+                          _buildAccountManagement(),
                           const SizedBox(height: 40),
                         ],
                       ),
@@ -214,6 +278,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildHeader() {
+    final l10n = AppLocalizations.of(context);
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Row(
@@ -229,13 +295,13 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
           const SizedBox(width: 16),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Settings',
-                  style: TextStyle(
+                  l10n?.settings ?? 'Settings',
+                  style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -243,8 +309,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                 ),
                 Text(
-                  'Manage your account and preferences',
-                  style: TextStyle(
+                  l10n?.manageAccount ?? 'Manage your account and preferences',
+                  style: const TextStyle(
                     fontSize: 16,
                     color: Colors.white70,
                     fontWeight: FontWeight.w500,
@@ -275,13 +341,15 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildProfileSection() {
+    final l10n = AppLocalizations.of(context);
+
     return ModernCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Profile Information',
-            style: TextStyle(
+          Text(
+            l10n?.profileInformation ?? 'Profile Information',
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: ModernTheme.textPrimary,
@@ -324,23 +392,28 @@ class _SettingsScreenState extends State<SettingsScreen>
                   children: [
                     Text(
                       _userData?.fullName ?? 'User',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: ModernTheme.textPrimary,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       _userData?.email ?? 'user@example.com',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: ModernTheme.textSecondary,
+                        color: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.color?.withOpacity(0.7),
                       ),
                     ),
                     const SizedBox(height: 8),
                     ModernStatusChip(
-                      text: _userData?.userType.toUpperCase() ?? 'CITIZEN',
+                      text:
+                          _userData?.isAdmin == true
+                              ? (l10n?.admin ?? 'ADMIN')
+                              : (l10n?.citizen ?? 'CITIZEN'),
                       color:
                           _userData?.isAdmin == true
                               ? ModernTheme.error
@@ -371,34 +444,39 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildAccountSettings() {
-    return _buildSection('Account Settings', [
+    final l10n = AppLocalizations.of(context);
+
+    return _buildSection(l10n?.accountSettings ?? 'Account Settings', [
       _buildSettingsTile(
         icon: Icons.person_outline,
-        title: 'Edit Profile',
-        subtitle: 'Update your personal information',
+        title: l10n?.editProfile ?? 'Edit Profile',
+        subtitle:
+            l10n?.updatePersonalInfo ?? 'Update your personal information',
         onTap: _editProfile,
       ),
       _buildSettingsTile(
         icon: Icons.lock_outline,
-        title: 'Change Password',
-        subtitle: 'Update your account password',
+        title: l10n?.changePassword ?? 'Change Password',
+        subtitle: l10n?.updateAccountPassword ?? 'Update your account password',
         onTap: _changePassword,
       ),
       _buildSettingsTile(
         icon: Icons.email_outlined,
-        title: 'Email Preferences',
-        subtitle: 'Manage email settings',
+        title: l10n?.emailPreferences ?? 'Email Preferences',
+        subtitle: l10n?.manageEmailSettings ?? 'Manage email settings',
         onTap: _emailPreferences,
       ),
     ]);
   }
 
   Widget _buildNotificationSettings() {
-    return _buildSection('Notifications', [
+    final l10n = AppLocalizations.of(context);
+
+    return _buildSection(l10n?.notifications ?? 'Notifications', [
       _buildSwitchTile(
         icon: Icons.notifications_outlined,
-        title: 'Enable Notifications',
-        subtitle: 'Receive app notifications',
+        title: l10n?.enableNotifications ?? 'Enable Notifications',
+        subtitle: l10n?.receiveAppNotifications ?? 'Receive app notifications',
         value: _notificationsEnabled,
         onChanged: (value) async {
           setState(() => _notificationsEnabled = value);
@@ -407,8 +485,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       _buildSwitchTile(
         icon: Icons.email_outlined,
-        title: 'Email Notifications',
-        subtitle: 'Receive notifications via email',
+        title: l10n?.emailNotifications ?? 'Email Notifications',
+        subtitle:
+            l10n?.receiveNotificationsViaEmail ??
+            'Receive notifications via email',
         value: _emailNotifications,
         onChanged: (value) async {
           setState(() => _emailNotifications = value);
@@ -417,8 +497,9 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       _buildSwitchTile(
         icon: Icons.phone_android,
-        title: 'Push Notifications',
-        subtitle: 'Receive push notifications',
+        title: l10n?.pushNotifications ?? 'Push Notifications',
+        subtitle:
+            l10n?.receivePushNotifications ?? 'Receive push notifications',
         value: _pushNotifications,
         onChanged: (value) async {
           setState(() => _pushNotifications = value);
@@ -429,26 +510,28 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildAppPreferences() {
-    return _buildSection('App Preferences', [
+    final l10n = AppLocalizations.of(context);
+
+    return _buildSection(l10n?.appPreferences ?? 'App Preferences', [
       _buildDropdownTile(
         icon: Icons.language,
-        title: 'Language',
-        subtitle: 'Choose your preferred language',
+        title: l10n?.language ?? 'Language',
+        subtitle:
+            l10n?.choosePreferredLanguage ?? 'Choose your preferred language',
         value: _selectedLanguage,
-        items: ['English', 'Spanish', 'French', 'German', 'Chinese'],
+        items: const ['English', 'Sinhala'],
         onChanged: (value) async {
           setState(() => _selectedLanguage = value!);
           await _updateAppPreferences();
         },
       ),
-      _buildDropdownTile(
-        icon: Icons.palette_outlined,
-        title: 'Theme',
-        subtitle: 'Choose app appearance',
-        value: _selectedTheme,
-        items: ['Light', 'Dark', 'System'],
+      _buildSwitchTile(
+        icon: Icons.dark_mode_outlined,
+        title: l10n?.darkMode ?? 'Dark Mode',
+        subtitle: l10n?.switchTheme ?? 'Switch between light and dark theme',
+        value: _isDarkMode,
         onChanged: (value) async {
-          setState(() => _selectedTheme = value!);
+          setState(() => _isDarkMode = value);
           await _updateAppPreferences();
         },
       ),
@@ -456,11 +539,14 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildPrivacySettings() {
-    return _buildSection('Privacy & Security', [
+    final l10n = AppLocalizations.of(context);
+
+    return _buildSection(l10n?.privacySecurity ?? 'Privacy & Security', [
       _buildSwitchTile(
         icon: Icons.location_on_outlined,
-        title: 'Location Services',
-        subtitle: 'Allow app to access your location',
+        title: l10n?.locationServices ?? 'Location Services',
+        subtitle:
+            l10n?.allowLocationAccess ?? 'Allow app to access your location',
         value: _locationEnabled,
         onChanged: (value) async {
           setState(() => _locationEnabled = value);
@@ -469,8 +555,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       _buildSwitchTile(
         icon: Icons.fingerprint,
-        title: 'Biometric Authentication',
-        subtitle: 'Use fingerprint or face unlock',
+        title: l10n?.biometricAuth ?? 'Biometric Authentication',
+        subtitle: l10n?.useBiometric ?? 'Use fingerprint or face unlock',
         value: _biometricEnabled,
         onChanged: (value) async {
           setState(() => _biometricEnabled = value);
@@ -479,93 +565,70 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       _buildSettingsTile(
         icon: Icons.security,
-        title: 'Privacy Policy',
-        subtitle: 'Read our privacy policy',
+        title: l10n?.privacyPolicy ?? 'Privacy Policy',
+        subtitle: l10n?.readPrivacyPolicy ?? 'Read our privacy policy',
         onTap: _showPrivacyPolicy,
       ),
       _buildSettingsTile(
         icon: Icons.download_outlined,
-        title: 'Export Data',
-        subtitle: 'Download your account data',
+        title: l10n?.exportData ?? 'Export Data',
+        subtitle: l10n?.downloadAccountData ?? 'Download your account data',
         onTap: _exportData,
       ),
     ]);
   }
 
   Widget _buildAboutSection() {
-    return _buildSection('About & Support', [
+    final l10n = AppLocalizations.of(context);
+
+    return _buildSection(l10n?.aboutSupport ?? 'About & Support', [
       _buildSettingsTile(
         icon: Icons.help_outline,
-        title: 'Help & Support',
-        subtitle: 'Get help or contact support',
+        title: l10n?.helpSupport ?? 'Help & Support',
+        subtitle: l10n?.getHelpContact ?? 'Get help or contact support',
         onTap: _helpSupport,
       ),
       _buildSettingsTile(
         icon: Icons.info_outline,
-        title: 'About CivicLink',
-        subtitle: 'App version and information',
+        title: l10n?.aboutCivicLink ?? 'About CivicLink',
+        subtitle: l10n?.appVersionInfo ?? 'App version and information',
         onTap: _aboutApp,
       ),
       _buildSettingsTile(
         icon: Icons.rate_review_outlined,
-        title: 'Rate App',
-        subtitle: 'Rate CivicLink on app store',
+        title: l10n?.rateApp ?? 'Rate App',
+        subtitle: l10n?.rateCivicLinkStore ?? 'Rate CivicLink on app store',
         onTap: _rateApp,
       ),
       _buildSettingsTile(
         icon: Icons.share_outlined,
-        title: 'Share App',
-        subtitle: 'Share CivicLink with friends',
+        title: l10n?.shareApp ?? 'Share App',
+        subtitle: l10n?.shareCivicLinkFriends ?? 'Share CivicLink with friends',
         onTap: _shareApp,
       ),
     ]);
   }
 
-  Widget _buildDangerZone() {
-    return ModernCard(
-      color: ModernTheme.error.withOpacity(0.05),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: ModernTheme.errorGradient,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.warning, color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Danger Zone',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: ModernTheme.error,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            icon: Icons.logout,
-            title: 'Sign Out',
-            subtitle: 'Sign out of your account',
-            onTap: _signOut,
-            textColor: ModernTheme.error,
-          ),
-          _buildSettingsTile(
-            icon: Icons.delete_forever,
-            title: 'Delete Account',
-            subtitle: 'Permanently delete your account',
-            onTap: _deleteAccount,
-            textColor: ModernTheme.error,
-          ),
-        ],
+  Widget _buildAccountManagement() {
+    final l10n = AppLocalizations.of(context);
+
+    return _buildSection(l10n?.accountManagement ?? 'Account Management', [
+      _buildSettingsTile(
+        icon: Icons.logout,
+        title: l10n?.signOut ?? 'Sign Out',
+        subtitle: l10n?.signOutAccount ?? 'Sign out from your account',
+        onTap: _signOut,
+        textColor: ModernTheme.primaryBlue,
       ),
-    );
+      _buildSettingsTile(
+        icon: Icons.delete_outline,
+        title: l10n?.deleteAccount ?? 'Delete Account',
+        subtitle:
+            l10n?.permanentlyRemoveAccount ?? 'Permanently remove your account',
+        onTap: _deleteAccount,
+        textColor: ModernTheme.error,
+      ),
+    ]);
   }
 
   Widget _buildSection(String title, List<Widget> children) {
@@ -590,10 +653,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               const SizedBox(width: 12),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: ModernTheme.textPrimary,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
                 ),
               ),
             ],
@@ -629,14 +692,23 @@ class _SettingsScreenState extends State<SettingsScreen>
         title,
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: textColor ?? ModernTheme.textPrimary,
+          color: textColor ?? Theme.of(context).textTheme.bodyLarge?.color,
         ),
       ),
-      subtitle: Text(subtitle),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.color?.withOpacity(0.7),
+        ),
+      ),
       trailing: Icon(
         Icons.arrow_forward_ios,
         size: 16,
-        color: textColor ?? ModernTheme.textSecondary,
+        color:
+            textColor ??
+            Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
       ),
       onTap: onTap,
       contentPadding: EdgeInsets.zero,
@@ -659,8 +731,21 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         child: Icon(icon, color: ModernTheme.primaryBlue, size: 20),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.color?.withOpacity(0.7),
+        ),
+      ),
       trailing: Switch(
         value: value,
         onChanged: onChanged,
@@ -687,8 +772,21 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         child: Icon(icon, color: ModernTheme.primaryBlue, size: 20),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.color?.withOpacity(0.7),
+        ),
+      ),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
@@ -699,7 +797,11 @@ class _SettingsScreenState extends State<SettingsScreen>
           value: value,
           onChanged: onChanged,
           underline: const SizedBox(),
-          style: const TextStyle(color: ModernTheme.textPrimary, fontSize: 14),
+          style: TextStyle(
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+            fontSize: 14,
+          ),
+          dropdownColor: Theme.of(context).cardColor,
           items:
               items.map((String item) {
                 return DropdownMenuItem<String>(value: item, child: Text(item));
@@ -872,6 +974,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   // Dialog Methods
   void _showEditProfileDialog() {
+    final l10n = AppLocalizations.of(context);
     final nameController = TextEditingController(text: _userData?.fullName);
     final emailController = TextEditingController(text: _userData?.email);
 
@@ -882,26 +985,27 @@ class _SettingsScreenState extends State<SettingsScreen>
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: const Text('Edit Profile'),
+            title: Text(l10n?.editProfile ?? 'Edit Profile'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
+                  decoration: InputDecoration(
+                    labelText: l10n?.fullName ?? 'Full Name',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.person),
                   ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
-                    helperText: 'Email cannot be changed',
+                  decoration: InputDecoration(
+                    labelText: l10n?.email ?? 'Email',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.email),
+                    helperText:
+                        l10n?.emailCannotBeChanged ?? 'Email cannot be changed',
                   ),
                   enabled: false,
                 ),
@@ -910,14 +1014,19 @@ class _SettingsScreenState extends State<SettingsScreen>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(l10n?.cancel ?? 'Cancel'),
               ),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showSuccessSnackBar('Profile updated successfully!');
+                onPressed: () async {
+                  final newName = nameController.text.trim();
+                  if (newName.isNotEmpty && newName != _userData?.fullName) {
+                    Navigator.pop(context);
+                    await _updateUserProfile(newName);
+                  } else {
+                    Navigator.pop(context);
+                  }
                 },
-                child: const Text('Save'),
+                child: Text(l10n?.save ?? 'Save'),
               ),
             ],
           ),
@@ -1065,8 +1174,19 @@ class _SettingsScreenState extends State<SettingsScreen>
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: Text(title),
-            content: Text(content),
+            backgroundColor: Theme.of(context).cardColor,
+            title: Text(
+              title,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
+            content: Text(
+              content,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+            ),
             actions: [
               if (showActions) ...[
                 TextButton(
@@ -1130,6 +1250,72 @@ class _SettingsScreenState extends State<SettingsScreen>
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+
+// Supporting classes (add these if they don't exist)
+class ModernCard extends StatelessWidget {
+  final Widget child;
+
+  const ModernCard({Key? key, required this.child}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class ModernStatusChip extends StatelessWidget {
+  final String text;
+  final Color color;
+  final IconData icon;
+
+  const ModernStatusChip({
+    Key? key,
+    required this.text,
+    required this.color,
+    required this.icon,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
