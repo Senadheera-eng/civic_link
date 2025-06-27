@@ -182,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen>
             child: SlideTransition(
               position: _slideAnimation,
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
