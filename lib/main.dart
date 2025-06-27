@@ -1,4 +1,4 @@
-// main.dart (FIXED WITH PROPER USER ROLE ROUTING)
+// main.dart (FIXED AuthWrapper with better debugging)
 import 'package:civic_link/screens/setting_screen.dart';
 import 'package:civic_link/screens/department_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -94,7 +94,7 @@ class AuthWrapper extends StatelessWidget {
         print("🔄 AuthWrapper: Has data = ${snapshot.hasData}");
         print("🔄 AuthWrapper: Data = ${snapshot.data?.email ?? 'null'}");
 
-        // Simple loading screen
+        // Loading screen while checking auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingScreen();
         }
@@ -102,7 +102,7 @@ class AuthWrapper extends StatelessWidget {
         // Check if user is logged in
         if (snapshot.hasData && snapshot.data != null) {
           return FutureBuilder<UserModel?>(
-            future: AuthService().getUserData(),
+            future: AuthService().getUserData(forceRefresh: true),
             builder: (context, userSnapshot) {
               print(
                 "👤 AuthWrapper: User data connection state = ${userSnapshot.connectionState}",
@@ -115,40 +115,81 @@ class AuthWrapper extends StatelessWidget {
                 return _buildLoadingScreen();
               }
 
+              if (userSnapshot.hasError) {
+                print(
+                  "❌ AuthWrapper: Error loading user data: ${userSnapshot.error}",
+                );
+                return _buildErrorScreen(userSnapshot.error.toString());
+              }
+
               if (userSnapshot.hasData && userSnapshot.data != null) {
                 final userData = userSnapshot.data!;
-                print("🏷️ AuthWrapper: User type = ${userData.userType}");
-                print("🏢 AuthWrapper: Department = ${userData.department}");
-                print("✅ AuthWrapper: Is verified = ${userData.isVerified}");
+                print("🔍 AuthWrapper: USER ROUTING ANALYSIS:");
+                print("   - User Type: '${userData.userType}'");
+                print("   - Department: '${userData.department ?? 'null'}'");
+                print("   - Is Verified: ${userData.isVerified}");
+                print("   - Is Active: ${userData.isActive}");
 
-                // SIMPLIFIED ROUTING - Only 2 user types
-                if (userData.userType == 'official') {
-                  if (!userData.isVerified) {
-                    print(
-                      "⚠️ AuthWrapper: Official account not verified - showing pending screen",
-                    );
-                    return _buildPendingVerificationScreen(userData, context);
-                  } else {
-                    print("➡️ AuthWrapper: Routing to Department Dashboard");
+                // Clean user type for comparison
+                final cleanUserType = userData.userType.trim().toLowerCase();
+                print("🧹 Cleaned user type: '$cleanUserType'");
+
+                // SIMPLIFIED ROUTING LOGIC
+                switch (cleanUserType) {
+                  case 'official':
+                    print("🏛️ OFFICIAL USER DETECTED");
+
+                    // Check if user has department
+                    if (userData.department == null ||
+                        userData.department!.trim().isEmpty) {
+                      print("❌ Official missing department");
+                      return _buildErrorScreen(
+                        "No department assigned. Please contact administrator.",
+                      );
+                    }
+
+                    // Check if account is active
+                    if (!userData.isActive) {
+                      print("❌ Official account inactive");
+                      return _buildErrorScreen(
+                        "Account is inactive. Please contact administrator.",
+                      );
+                    }
+
+                    print("✅ ROUTING TO DEPARTMENT DASHBOARD");
+                    print("🏢 Department: ${userData.department}");
                     return DepartmentDashboard();
-                  }
-                } else {
-                  // All other users go to citizen home (including 'citizen' type)
-                  print("➡️ AuthWrapper: Routing to Citizen Home Screen");
-                  return HomeScreen();
+
+                  case 'citizen':
+                    print("👤 CITIZEN USER → Home Screen");
+                    return HomeScreen();
+
+                  case 'admin':
+                    print("🔧 ADMIN USER → Admin Dashboard");
+                    return AdminDashboard();
+
+                  default:
+                    print("❓ UNKNOWN USER TYPE: '$cleanUserType'");
+                    print("🔄 Defaulting to Home Screen");
+                    return HomeScreen();
                 }
               }
 
-              print(
-                "⚠️ AuthWrapper: No user data found, defaulting to Home Screen",
-              );
+              // No user data found
+              print("⚠️ AuthWrapper: No user data found");
+              final currentUser = snapshot.data;
+              if (currentUser != null) {
+                print("🔧 No user document for: ${currentUser.email}");
+                return _buildProfileSetupScreen(currentUser, context);
+              }
+
               return HomeScreen();
             },
           );
         }
 
-        // User not logged in - show login
-        print("🔐 AuthWrapper: No authenticated user, routing to Login");
+        // User not logged in
+        print("🔐 AuthWrapper: No authenticated user → Login");
         return LoginScreen();
       },
     );
@@ -168,7 +209,6 @@ class AuthWrapper extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Simple animated logo
               Icon(Icons.location_city, size: 80, color: Colors.white),
               SizedBox(height: 24),
               Text(
@@ -181,16 +221,11 @@ class AuthWrapper extends StatelessWidget {
               ),
               SizedBox(height: 8),
               Text(
-                'Report. Track. Resolve.',
+                'Loading your dashboard...',
                 style: TextStyle(fontSize: 16, color: Colors.white70),
               ),
               SizedBox(height: 48),
               CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
-              SizedBox(height: 16),
-              Text(
-                'Loading...',
-                style: TextStyle(color: Colors.white70, fontSize: 16),
-              ),
             ],
           ),
         ),
@@ -198,10 +233,63 @@ class AuthWrapper extends StatelessWidget {
     );
   }
 
-  Widget _buildPendingVerificationScreen(
-    UserModel userData,
-    BuildContext context,
-  ) {
+  Widget _buildErrorScreen(String error) {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.red.shade400, Colors.red.shade600],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 80, color: Colors.white),
+                const SizedBox(height: 24),
+                const Text(
+                  'Account Error',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  error,
+                  style: const TextStyle(fontSize: 16, color: Colors.white70),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await AuthService().signOut();
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign Out & Try Again'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileSetupScreen(User user, BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -217,7 +305,6 @@ class AuthWrapper extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Pending verification icon
                 Container(
                   width: 120,
                   height: 120,
@@ -230,16 +317,14 @@ class AuthWrapper extends StatelessWidget {
                     ),
                   ),
                   child: const Icon(
-                    Icons.pending,
+                    Icons.person_add,
                     size: 60,
                     color: Colors.white,
                   ),
                 ),
-
                 const SizedBox(height: 32),
-
                 const Text(
-                  'Account Pending Verification',
+                  'Profile Setup Required',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -248,131 +333,42 @@ class AuthWrapper extends StatelessWidget {
                   ),
                   textAlign: TextAlign.center,
                 ),
-
                 const SizedBox(height: 16),
-
                 Text(
-                  'Welcome ${userData.fullName}!',
+                  'Welcome ${user.email}!\nComplete your registration to continue.',
                   style: const TextStyle(
-                    fontSize: 20,
-                    color: Colors.white,
+                    fontSize: 16,
+                    color: Colors.white70,
                     fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
                 ),
-
-                const SizedBox(height: 24),
-
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.info_outline,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Your ${userData.department} official account is currently under review.',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Employee ID: ${userData.employeeId}\nDepartment: ${userData.department}\n\nYou will be notified once your account is verified by the administrator.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.9),
-                          height: 1.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-
                 const SizedBox(height: 32),
-
-                // Action buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                          ),
-                        ),
-                        child: TextButton.icon(
-                          onPressed: () async {
-                            await AuthService().signOut();
-                          },
-                          icon: const Icon(Icons.logout, color: Colors.white),
-                          label: const Text(
-                            'Sign Out',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await AuthService().signOut();
+                    Navigator.pushReplacementNamed(context, '/register');
+                  },
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Complete Registration'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: SimpleTheme.primaryBlue,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: TextButton.icon(
-                          onPressed: () {
-                            // Refresh the auth state to check if verification status changed
-                            Navigator.pushReplacementNamed(context, '/login');
-                          },
-                          icon: Icon(
-                            Icons.refresh,
-                            color: SimpleTheme.primaryBlue,
-                          ),
-                          label: Text(
-                            'Refresh',
-                            style: TextStyle(
-                              color: SimpleTheme.primaryBlue,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                Text(
-                  'Need help? Contact support at support@civiclink.com',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withOpacity(0.7),
                   ),
-                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () async {
+                    await AuthService().signOut();
+                  },
+                  child: const Text(
+                    'Sign Out',
+                    style: TextStyle(color: Colors.white70),
+                  ),
                 ),
               ],
             ),

@@ -286,7 +286,12 @@ class NotificationService {
   // Get user notifications stream
   Stream<List<NotificationModel>> getUserNotificationsStream() {
     final user = _auth.currentUser;
-    if (user == null) return Stream.value([]);
+    if (user == null) {
+      print("❌ No user for notifications stream");
+      return Stream.value([]);
+    }
+
+    print("🔔 Setting up notifications stream for user: ${user.uid}");
 
     return _firestore
         .collection('notifications')
@@ -294,12 +299,64 @@ class NotificationService {
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs
-                  .map((doc) => NotificationModel.fromFirestore(doc))
-                  .toList(),
-        );
+        .handleError((error) {
+          print("❌ Notifications stream error: $error");
+          if (error is FirebaseException) {
+            print(
+              "🔥 Firebase Exception in notifications stream: ${error.code} - ${error.message}",
+            );
+          }
+        })
+        .map((snapshot) {
+          print(
+            "🔔 Notifications stream update: ${snapshot.docs.length} documents",
+          );
+          return snapshot.docs
+              .map((doc) {
+                try {
+                  return NotificationModel.fromFirestore(doc);
+                } catch (e) {
+                  print("❌ Error parsing notification document ${doc.id}: $e");
+                  print("📄 Document data: ${doc.data()}");
+                  return null;
+                }
+              })
+              .where((notification) => notification != null)
+              .cast<NotificationModel>()
+              .toList();
+        });
+  }
+
+  Future<void> testFirestoreConnection() async {
+    try {
+      print("🧪 Testing Firestore connection...");
+
+      // Test write
+      await _firestore.collection('test').doc('connection_test').set({
+        'timestamp': FieldValue.serverTimestamp(),
+        'userId': _auth.currentUser?.uid,
+        'test': 'connection test',
+      });
+      print("✅ Write test successful");
+
+      // Test read
+      final doc =
+          await _firestore.collection('test').doc('connection_test').get();
+      if (doc.exists) {
+        print("✅ Read test successful: ${doc.data()}");
+      } else {
+        print("❌ Document doesn't exist after write");
+      }
+
+      // Clean up
+      await _firestore.collection('test').doc('connection_test').delete();
+      print("✅ Cleanup successful");
+    } catch (e) {
+      print("❌ Firestore connection test failed: $e");
+      if (e is FirebaseException) {
+        print("🔥 Firebase Exception: ${e.code} - ${e.message}");
+      }
+    }
   }
 
   // Mark notification as read

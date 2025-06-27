@@ -43,6 +43,16 @@ class AuthService {
       print("🆔 User UID: ${result.user?.uid}");
       print("✉️ Email verified: ${result.user?.emailVerified}");
 
+      // IMPORTANT: Clear any cached user data and force fresh fetch
+      print("🔄 Clearing cached user data and fetching fresh data...");
+
+      // Wait a moment for Firestore to be ready
+      await Future.delayed(Duration(milliseconds: 500));
+
+      // Force refresh the user data from Firestore
+      final userData = await _getUserDataFresh(result.user!.uid);
+      print("📊 Fresh user data retrieved: ${userData?.toString()}");
+
       return result;
     } on FirebaseAuthException catch (e) {
       print("❌ FirebaseAuthException occurred:");
@@ -72,6 +82,39 @@ class AuthService {
     } catch (e) {
       print("❌ General error during sign in: $e");
       throw 'Login failed: ${e.toString()}';
+    }
+  }
+
+  // Add this new method to get fresh user data without caching
+  Future<UserModel?> _getUserDataFresh(String uid) async {
+    try {
+      print("📋 AuthService: Getting FRESH user data for UID: $uid");
+
+      // Force network fetch from Firestore
+      DocumentSnapshot doc = await _firestore
+          .collection('users')
+          .doc(uid)
+          .get(GetOptions(source: Source.server)) // Force server fetch
+          .timeout(Duration(seconds: 15));
+
+      if (doc.exists) {
+        print("✅ Fresh user document found in Firestore");
+        final userData = UserModel.fromFirestore(doc);
+        print("👤 Fresh user data loaded:");
+        print("   Name: ${userData.fullName}");
+        print("   Type: ${userData.userType}");
+        print("   Department: ${userData.department ?? 'N/A'}");
+        print("   Verified: ${userData.isVerified}");
+        print("   Email: ${userData.email}");
+
+        return userData;
+      } else {
+        print("⚠️ Fresh user document not found in Firestore");
+        return null;
+      }
+    } catch (e) {
+      print("❌ Error getting fresh user data: $e");
+      return null;
     }
   }
 
@@ -269,88 +312,215 @@ class AuthService {
   }) async {
     try {
       print("📄 Creating user document for ${user.email}");
+      print("🏷️ User type: $userType");
+      print("🏢 Department: $department");
+      print("🆔 Employee ID: $employeeId");
 
-      // Add retry mechanism for network issues
-      int retryCount = 0;
-      const maxRetries = 3;
+      // Create basic user data with detailed logging
+      final userData = <String, dynamic>{
+        'uid': user.uid,
+        'email': user.email ?? '',
+        'fullName': fullName,
+        'userType': userType,
+        'createdAt': FieldValue.serverTimestamp(),
+        'profilePicture': user.photoURL ?? '',
+        'isActive': true,
+      };
 
-      while (retryCount < maxRetries) {
-        try {
-          // Check if document already exists
-          final userDoc = await _firestore
-              .collection('users')
-              .doc(user.uid)
-              .get()
-              .timeout(Duration(seconds: 10)); // Add timeout
+      // Add fields based on user type
+      if (userType == 'official') {
+        userData['department'] = department ?? '';
+        userData['employeeId'] = employeeId ?? '';
+        // AUTO-VERIFY OFFICIALS - No manual verification needed
+        userData['isVerified'] = true;
+        userData['verifiedAt'] = FieldValue.serverTimestamp();
+        userData['verifiedBy'] = 'auto_verification_on_registration';
 
-          if (!userDoc.exists) {
-            // Create basic user data
-            final userData = <String, dynamic>{
-              'uid': user.uid,
-              'email': user.email ?? '',
-              'fullName': fullName,
-              'userType': userType,
-              'createdAt': FieldValue.serverTimestamp(),
-              'profilePicture': user.photoURL ?? '',
-              'isActive': true,
-            };
+        print("🏢 Added official-specific fields:");
+        print("   - department: ${userData['department']}");
+        print("   - employeeId: ${userData['employeeId']}");
+        print("   - isVerified: ${userData['isVerified']} (AUTO-VERIFIED)");
+      } else {
+        userData['isVerified'] = true;
+        userData['verifiedAt'] = FieldValue.serverTimestamp();
+        print("👤 Set as verified citizen");
+      }
 
-            // Add fields based on user type
-            if (userType == 'official') {
-              userData['department'] = department ?? '';
-              userData['employeeId'] = employeeId ?? '';
-              userData['isVerified'] = false;
-              print("🏢 Added official-specific fields");
-            } else {
-              userData['isVerified'] = true;
-              print("👤 Set as verified citizen");
-            }
+      print("💾 Complete user data to save:");
+      userData.forEach((key, value) {
+        print("   $key: $value");
+      });
 
-            print("💾 Saving user document to Firestore...");
-            await _firestore
-                .collection('users')
-                .doc(user.uid)
-                .set(userData)
-                .timeout(Duration(seconds: 10));
+      print("💾 Attempting to save to Firestore...");
 
-            print("✅ User document created successfully");
-            return; // Success, exit retry loop
-          } else {
-            print("ℹ️ User document already exists, skipping creation");
-            return; // Document exists, exit retry loop
-          }
-        } catch (e) {
-          retryCount++;
-          print("❌ Attempt $retryCount failed: $e");
+      // Try to write to Firestore with detailed error catching
+      await _firestore.collection('users').doc(user.uid).set(userData);
 
-          if (retryCount >= maxRetries) {
-            throw e; // Max retries reached, throw the error
-          }
+      print("✅ User document created successfully in Firestore");
 
-          // Wait before retry
-          await Future.delayed(Duration(seconds: retryCount * 2));
-          print("🔄 Retrying... (attempt ${retryCount + 1}/$maxRetries)");
-        }
+      // Verify the document was created
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        print("✅ Document verification successful");
+        print("📄 Saved data: ${doc.data()}");
+      } else {
+        print("❌ Document verification failed - document doesn't exist");
       }
     } catch (e) {
-      print("❌ Error creating user document after retries: $e");
-      print("❌ Full error details: ${e.toString()}");
+      print("❌ Error creating user document: $e");
+      print("❌ Error type: ${e.runtimeType}");
 
-      // Check if it's a network/availability error
-      if (e.toString().contains('unavailable') ||
-          e.toString().contains('network') ||
-          e.toString().contains('timeout')) {
-        throw 'Network error: Please check your internet connection and try again';
+      // Check specific error types
+      if (e.toString().contains('permission-denied')) {
+        print("🚫 PERMISSION DENIED ERROR");
+        print("🔧 Check your Firestore security rules");
+        throw 'Permission denied: Please check Firestore security rules';
+      } else if (e.toString().contains('unavailable')) {
+        print("🌐 NETWORK/SERVICE UNAVAILABLE ERROR");
+        throw 'Service unavailable: Please check your internet connection';
       } else {
+        print("❓ UNKNOWN ERROR");
         throw 'Failed to create user profile: ${e.toString()}';
       }
     }
   }
 
+  // ONE-TIME FIX: Update existing official accounts to verified
+  Future<void> fixExistingOfficialAccounts() async {
+    try {
+      print("🔧 Fixing existing official accounts...");
+
+      // Get all official accounts that are not verified
+      final querySnapshot =
+          await _firestore
+              .collection('users')
+              .where('userType', isEqualTo: 'official')
+              .where('isVerified', isEqualTo: false)
+              .get();
+
+      print(
+        "📋 Found ${querySnapshot.docs.length} unverified official accounts",
+      );
+
+      final batch = _firestore.batch();
+
+      for (var doc in querySnapshot.docs) {
+        final data = doc.data();
+        print("🔧 Fixing account: ${data['email']} (${data['department']})");
+
+        batch.update(doc.reference, {
+          'isVerified': true,
+          'verifiedAt': FieldValue.serverTimestamp(),
+          'verifiedBy': 'auto_fix_existing_officials',
+        });
+      }
+
+      await batch.commit();
+      print("✅ Fixed ${querySnapshot.docs.length} official accounts");
+    } catch (e) {
+      print("❌ Error fixing official accounts: $e");
+      throw e;
+    }
+  }
+
+  Future<UserCredential?> testRegistration(
+    String email,
+    String password,
+    String fullName,
+    String userType, {
+    String? department,
+    String? employeeId,
+  }) async {
+    try {
+      print("🧪 STARTING TEST REGISTRATION");
+      print("📧 Email: $email");
+      print("🏷️ User type: $userType");
+
+      // Step 1: Create Firebase Auth user
+      print("\n🔥 Step 1: Creating Firebase Auth user...");
+      UserCredential result = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      print("✅ Firebase Auth user created successfully");
+      print("🆔 UID: ${result.user?.uid}");
+
+      // Step 2: Test basic Firestore write
+      print("\n📝 Step 2: Testing basic Firestore write...");
+      await _firestore.collection('test').doc('write_test').set({
+        'timestamp': FieldValue.serverTimestamp(),
+        'test': 'basic write test',
+      });
+      print("✅ Basic Firestore write successful");
+
+      // Step 3: Test user document creation
+      print("\n👤 Step 3: Creating user document...");
+
+      // Create minimal user document first
+      final minimalData = {
+        'uid': result.user!.uid,
+        'email': email,
+        'userType': userType,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      print("💾 Writing minimal user data: $minimalData");
+      await _firestore
+          .collection('users')
+          .doc(result.user!.uid)
+          .set(minimalData);
+      print("✅ Minimal user document created");
+
+      // Step 4: Add additional fields if official
+      if (userType == 'official') {
+        print("\n🏢 Step 4: Adding official fields...");
+        await _firestore.collection('users').doc(result.user!.uid).update({
+          'fullName': fullName,
+          'department': department,
+          'employeeId': employeeId,
+          'isVerified': false,
+          'isActive': true,
+        });
+        print("✅ Official fields added successfully");
+      } else {
+        print("\n👤 Step 4: Adding citizen fields...");
+        await _firestore.collection('users').doc(result.user!.uid).update({
+          'fullName': fullName,
+          'isVerified': true,
+          'isActive': true,
+        });
+        print("✅ Citizen fields added successfully");
+      }
+
+      // Step 5: Verify final document
+      print("\n🔍 Step 5: Verifying final document...");
+      final finalDoc =
+          await _firestore.collection('users').doc(result.user!.uid).get();
+
+      if (finalDoc.exists) {
+        print("✅ Final document verification successful");
+        print("📄 Final data: ${finalDoc.data()}");
+      }
+
+      // Clean up test document
+      await _firestore.collection('test').doc('write_test').delete();
+
+      print("\n🎉 TEST REGISTRATION COMPLETED SUCCESSFULLY");
+      return result;
+    } catch (e) {
+      print("\n❌ TEST REGISTRATION FAILED");
+      print("❌ Error: $e");
+      print("❌ Error type: ${e.runtimeType}");
+      throw e;
+    }
+  }
+
   // Enhanced getUserData with retry mechanism
-  Future<UserModel?> getUserData() async {
+  Future<UserModel?> getUserData({bool forceRefresh = false}) async {
     final user = currentUser;
-    print("📋 AuthService: Getting user data for ${user?.email ?? 'null'}");
+    print(
+      "📋 AuthService: Getting user data for ${user?.email ?? 'null'} (forceRefresh: $forceRefresh)",
+    );
 
     if (user == null) {
       print("❌ No current user found");
@@ -364,20 +534,38 @@ class AuthService {
 
       while (retryCount < maxRetries) {
         try {
+          // Force server fetch if requested or on first retry
+          final source =
+              (forceRefresh || retryCount > 0) ? Source.server : Source.cache;
+
+          print(
+            "📡 Fetching user data from: ${source == Source.server ? 'SERVER' : 'CACHE'}",
+          );
+
           DocumentSnapshot doc = await _firestore
               .collection('users')
               .doc(user.uid)
-              .get()
-              .timeout(Duration(seconds: 10));
+              .get(GetOptions(source: source))
+              .timeout(Duration(seconds: 15));
 
           if (doc.exists) {
             print("✅ User document found in Firestore");
             final userData = UserModel.fromFirestore(doc);
             print("👤 User data loaded:");
             print("   Name: ${userData.fullName}");
-            print("   Type: ${userData.userType}");
-            print("   Department: ${userData.department ?? 'N/A'}");
+            print(
+              "   Type: '${userData.userType}' (length: ${userData.userType.length})",
+            );
+            print("   Department: '${userData.department ?? 'N/A'}'");
             print("   Verified: ${userData.isVerified}");
+            print("   UID: ${userData.uid}");
+            print("   Email: ${userData.email}");
+
+            // Validate user type
+            if (userData.userType.trim().isEmpty) {
+              print("⚠️ WARNING: User type is empty, defaulting to 'citizen'");
+              return userData.copyWith(userType: 'citizen');
+            }
 
             return userData;
           } else {
@@ -426,6 +614,8 @@ class AuthService {
 
       return null;
     }
+
+    return null;
   }
 
   Future<void> signOut() async {
@@ -476,6 +666,83 @@ class AuthService {
       print("✅ Official registration logged for admin review");
     } catch (e) {
       print("❌ Error logging official registration: $e");
+    }
+  }
+
+  Future<void> debugUserData() async {
+    try {
+      final user = currentUser;
+      if (user == null) {
+        print("❌ DEBUG: No current user");
+        return;
+      }
+
+      print("🔍 DEBUG: Starting user data analysis...");
+      print("👤 Firebase Auth User:");
+      print("   - UID: ${user.uid}");
+      print("   - Email: ${user.email}");
+      print("   - Display Name: ${user.displayName}");
+      print("   - Email Verified: ${user.emailVerified}");
+
+      // Check if user document exists in Firestore
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+
+      if (!doc.exists) {
+        print("❌ DEBUG: User document does NOT exist in Firestore");
+        return;
+      }
+
+      print("✅ DEBUG: User document exists in Firestore");
+      final data = doc.data() as Map<String, dynamic>;
+
+      print("📄 DEBUG: Raw Firestore Data:");
+      data.forEach((key, value) {
+        print("   - $key: '$value' (${value.runtimeType})");
+      });
+
+      // Specifically check userType field
+      final userType = data['userType'];
+      print("🏷️ DEBUG: User Type Analysis:");
+      print("   - Raw Value: '$userType'");
+      print("   - Type: ${userType.runtimeType}");
+      print("   - Length: ${userType?.toString().length ?? 0}");
+      print("   - Trimmed: '${userType?.toString().trim()}'");
+      print("   - Lowercase: '${userType?.toString().trim().toLowerCase()}'");
+
+      // Check department info for officials
+      if (userType?.toString().trim().toLowerCase() == 'official') {
+        final department = data['department'];
+        final employeeId = data['employeeId'];
+        final isVerified = data['isVerified'];
+
+        print("🏢 DEBUG: Official Account Analysis:");
+        print("   - Department: '$department' (${department.runtimeType})");
+        print("   - Employee ID: '$employeeId' (${employeeId.runtimeType})");
+        print("   - Is Verified: '$isVerified' (${isVerified.runtimeType})");
+        print(
+          "   - Is Active: '${data['isActive']}' (${data['isActive'].runtimeType})",
+        );
+      }
+
+      // Test UserModel creation
+      try {
+        final userModel = UserModel.fromFirestore(doc);
+        print("✅ DEBUG: UserModel created successfully");
+        print("👤 DEBUG: UserModel Properties:");
+        print(
+          "   - User Type: '${userModel.userType}' (${userModel.userType.runtimeType})",
+        );
+        print("   - Is Official: ${userModel.isOfficial}");
+        print("   - Department: '${userModel.department ?? 'null'}'");
+        print("   - Is Verified: ${userModel.isVerified}");
+        print(
+          "   - Can Access Dept Features: ${userModel.canAccessDepartmentFeatures}",
+        );
+      } catch (e) {
+        print("❌ DEBUG: Error creating UserModel: $e");
+      }
+    } catch (e) {
+      print("❌ DEBUG: Error in debugUserData: $e");
     }
   }
 

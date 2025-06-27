@@ -154,7 +154,18 @@ class _RegisterScreenState extends State<RegisterScreen>
     setState(() => _isLoading = true);
 
     try {
-      await _authService.registerWithEmail(
+      print("🚀 Starting registration process...");
+      print("📧 Email: ${_emailController.text}");
+      print("👤 Name: ${_fullNameController.text}");
+      print("🏷️ Type: $_selectedUserType");
+
+      if (_selectedUserType == 'official') {
+        print("🏢 Department: $_selectedDepartment");
+        print("🆔 Employee ID: ${_employeeIdController.text.trim()}");
+      }
+
+      // Use test registration method
+      final result = await _authService.testRegistration(
         _emailController.text,
         _passwordController.text,
         _fullNameController.text,
@@ -166,6 +177,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                 ? _employeeIdController.text.trim()
                 : null,
       );
+
+      print("✅ Registration completed successfully");
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -187,6 +200,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
       Navigator.pop(context);
     } catch (e) {
+      print("❌ Registration failed: $e");
       _showErrorSnackBar(e.toString());
     } finally {
       setState(() => _isLoading = false);

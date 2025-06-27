@@ -78,22 +78,18 @@ class _LoginScreenState extends State<LoginScreen>
       );
 
       if (result != null) {
-        print("✅ LoginScreen: Sign in successful, getting user data");
+        print(
+          "✅ LoginScreen: Sign in successful, letting AuthWrapper handle routing",
+        );
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Add a small delay to ensure Firestore is ready
+        await Future.delayed(const Duration(milliseconds: 1000));
 
-        final userData = await _authService.getUserData();
-        if (userData != null) {
-          print("✅ LoginScreen: User data retrieved, navigating");
-          if (userData.isAdmin) {
-            Navigator.pushReplacementNamed(context, '/admin');
-          } else {
-            Navigator.pushReplacementNamed(context, '/home');
-          }
-        } else {
-          print("⚠️ LoginScreen: User data not found, going to home anyway");
-          Navigator.pushReplacementNamed(context, '/home');
-        }
+        // Don't do manual routing here - let AuthWrapper handle it
+        // The AuthWrapper will automatically route based on the user type
+        print(
+          "🔄 LoginScreen: AuthWrapper should now handle routing based on user type",
+        );
       }
     } catch (e) {
       print("❌ LoginScreen: Sign in failed with error: $e");
@@ -448,6 +444,46 @@ class _LoginScreenState extends State<LoginScreen>
                           fontWeight: FontWeight.w600,
                           color: ModernTheme.textPrimary,
                           letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // DEBUG BUTTON - Remove after fixing
+            Container(
+              width: double.infinity,
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.orange,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  onTap: () async {
+                    // Debug current user data
+                    await AuthService().debugUserData();
+
+                    // Also check auth state
+                    await AuthService().checkAuthState();
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.bug_report, color: Colors.white),
+                      SizedBox(width: 12),
+                      Text(
+                        'Debug User Data',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
                       ),
                     ],
