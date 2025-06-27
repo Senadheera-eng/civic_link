@@ -470,46 +470,6 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-
-            // DEBUG BUTTON - Remove after fixing
-            Container(
-              width: double.infinity,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.orange,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  onTap: () async {
-                    // Debug current user data
-                    await AuthService().debugUserData();
-
-                    // Also check auth state
-                    await AuthService().checkAuthState();
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.bug_report, color: Colors.white),
-                      SizedBox(width: 12),
-                      Text(
-                        'Debug User Data',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
