@@ -56,7 +56,7 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
           child: FadeTransition(
             opacity: _fadeAnimation,
             child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
+              physics: const ClampingScrollPhysics(),
               child: Column(
                 children: [
                   // Scrollable Header
