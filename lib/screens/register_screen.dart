@@ -1,4 +1,5 @@
 // screens/register_screen.dart (ENHANCED WITH DEPARTMENT SELECTION)
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/modern_theme.dart';
@@ -101,6 +102,25 @@ class _RegisterScreenState extends State<RegisterScreen>
     _selectedDepartment = _departments.first['name'];
   }
 
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   void _initAnimations() {
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 1200),
@@ -164,8 +184,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         print("🆔 Employee ID: ${_employeeIdController.text.trim()}");
       }
 
-      // Use test registration method
-      final result = await _authService.testRegistration(
+      final result = await _authService.registerWithEmail(
         _emailController.text,
         _passwordController.text,
         _fullNameController.text,
@@ -205,24 +224,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: ModernTheme.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
   }
 
   @override

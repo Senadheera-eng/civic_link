@@ -181,12 +181,12 @@ class AuthService {
     String? employeeId,
   }) async {
     try {
-      print("🔐 AuthService: Starting registration process");
-      print("📧 Email: $email");
-      print("👤 Full name: $fullName");
-      print("🏷️ User type: $userType");
-      if (department != null) print("🏢 Department: $department");
-      if (employeeId != null) print("🆔 Employee ID: $employeeId");
+      print("🔐 DEBUG: AuthService registerWithEmail called");
+      print("📧 DEBUG: Email: $email");
+      print("👤 DEBUG: Full name: $fullName");
+      print("🏷️ DEBUG: User type: $userType");
+      if (department != null) print("🏢 DEBUG: Department: $department");
+      if (employeeId != null) print("🆔 DEBUG: Employee ID: $employeeId");
 
       // Validate official account requirements
       if (userType == 'official') {
@@ -196,34 +196,21 @@ class AuthService {
         if (employeeId == null || employeeId.isEmpty) {
           throw 'Employee ID is required for official accounts';
         }
-
-        // Check if employee ID already exists
-        print("🔍 Checking if Employee ID already exists...");
-        final existingEmployee =
-            await _firestore
-                .collection('users')
-                .where('employeeId', isEqualTo: employeeId)
-                .where('userType', isEqualTo: 'official')
-                .get();
-
-        if (existingEmployee.docs.isNotEmpty) {
-          throw 'This Employee ID is already registered';
-        }
-        print("✅ Employee ID is unique");
+        print("✅ DEBUG: Official account validation passed");
       }
 
-      print("🔥 Creating Firebase user account...");
+      print("🔥 DEBUG: Creating Firebase user account...");
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
-      print("✅ Firebase registration successful!");
-      print("👤 New user: ${result.user?.email}");
-      print("🆔 User UID: ${result.user?.uid}");
+      print("✅ DEBUG: Firebase registration successful!");
+      print("👤 DEBUG: New user: ${result.user?.email}");
+      print("🆔 DEBUG: User UID: ${result.user?.uid}");
 
       // Create user document in Firestore
-      print("📄 Creating user document in Firestore...");
+      print("📄 DEBUG: About to call _createUserDocument...");
       await _createUserDocument(
         result.user!,
         fullName,
@@ -232,53 +219,11 @@ class AuthService {
         employeeId: employeeId,
       );
 
-      print("✅ User document created successfully");
-
-      // Send welcome notification
-      print("🔔 Sending welcome notification...");
-      try {
-        await NotificationService().sendWelcomeNotification(result.user!.uid);
-        print("✅ Welcome notification sent");
-      } catch (e) {
-        print("⚠️ Failed to send welcome notification: $e");
-      }
-
-      // Send department-specific welcome for officials
-      if (userType == 'official' && department != null) {
-        print("🏢 Sending department welcome notification...");
-        try {
-          await _sendDepartmentWelcomeNotification(
-            result.user!.uid,
-            department,
-          );
-          print("✅ Department welcome notification sent");
-        } catch (e) {
-          print("⚠️ Failed to send department welcome notification: $e");
-        }
-      }
-
-      print("🎉 Registration process completed successfully!");
+      print("✅ DEBUG: _createUserDocument completed");
       return result;
-    } on FirebaseAuthException catch (e) {
-      print("❌ Registration FirebaseAuthException:");
-      print("   Code: ${e.code}");
-      print("   Message: ${e.message}");
-
-      switch (e.code) {
-        case 'weak-password':
-          throw 'Password is too weak. Please choose a stronger password.';
-        case 'email-already-in-use':
-          throw 'An account already exists with this email address.';
-        case 'invalid-email':
-          throw 'Please enter a valid email address.';
-        case 'operation-not-allowed':
-          throw 'Email/password accounts are not enabled.';
-        default:
-          throw 'Registration failed: ${e.message ?? 'Unknown error'}';
-      }
     } catch (e) {
-      print("❌ General registration error: $e");
-      throw 'Registration failed: ${e.toString()}';
+      print("❌ DEBUG: registerWithEmail error: $e");
+      rethrow;
     }
   }
 
