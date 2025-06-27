@@ -43,16 +43,37 @@ class AuthService {
       print("🆔 User UID: ${result.user?.uid}");
       print("✉️ Email verified: ${result.user?.emailVerified}");
 
-      // IMPORTANT: Clear any cached user data and force fresh fetch
-      print("🔄 Clearing cached user data and fetching fresh data...");
-
-      // Wait a moment for Firestore to be ready
+      // Wait for Firebase to fully process the authentication
       await Future.delayed(Duration(milliseconds: 500));
 
-      // Force refresh the user data from Firestore
-      final userData = await _getUserDataFresh(result.user!.uid);
-      print("📊 Fresh user data retrieved: ${userData?.toString()}");
+      // Verify the user is actually signed in
+      final currentUser = _auth.currentUser;
+      print("🔍 Current user after sign in: ${currentUser?.email ?? 'null'}");
 
+      if (currentUser == null) {
+        throw Exception(
+          'Sign in failed - no current user after authentication',
+        );
+      }
+
+      // Force refresh the auth state
+      await currentUser.reload();
+      print("🔄 User reloaded successfully");
+
+      // Test Firestore access
+      try {
+        print("📊 Testing Firestore access...");
+        final userData = await _getUserDataFresh(currentUser.uid);
+        print("📊 User data retrieved: ${userData?.toString() ?? 'null'}");
+
+        if (userData == null) {
+          print("⚠️ Warning: No user document found in Firestore");
+        }
+      } catch (e) {
+        print("⚠️ Warning: Firestore access test failed: $e");
+      }
+
+      print("✅ Sign in process completed successfully");
       return result;
     } on FirebaseAuthException catch (e) {
       print("❌ FirebaseAuthException occurred:");

@@ -84,7 +84,12 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
+  @override
+  _AuthWrapperState createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
@@ -94,105 +99,107 @@ class AuthWrapper extends StatelessWidget {
         print("🔄 AuthWrapper: Has data = ${snapshot.hasData}");
         print("🔄 AuthWrapper: Data = ${snapshot.data?.email ?? 'null'}");
 
-        // Loading screen while checking auth state
+        // Show loading while waiting for auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
+          print("⏳ AuthWrapper: Waiting for auth state...");
           return _buildLoadingScreen();
         }
 
-        // Check if user is logged in
-        if (snapshot.hasData && snapshot.data != null) {
-          return FutureBuilder<UserModel?>(
-            future: AuthService().getUserData(forceRefresh: true),
-            builder: (context, userSnapshot) {
-              print(
-                "👤 AuthWrapper: User data connection state = ${userSnapshot.connectionState}",
-              );
-              print(
-                "👤 AuthWrapper: User data = ${userSnapshot.data?.toString() ?? 'null'}",
-              );
-
-              if (userSnapshot.connectionState == ConnectionState.waiting) {
-                return _buildLoadingScreen();
-              }
-
-              if (userSnapshot.hasError) {
-                print(
-                  "❌ AuthWrapper: Error loading user data: ${userSnapshot.error}",
-                );
-                return _buildErrorScreen(userSnapshot.error.toString());
-              }
-
-              if (userSnapshot.hasData && userSnapshot.data != null) {
-                final userData = userSnapshot.data!;
-                print("🔍 AuthWrapper: USER ROUTING ANALYSIS:");
-                print("   - User Type: '${userData.userType}'");
-                print("   - Department: '${userData.department ?? 'null'}'");
-                print("   - Is Verified: ${userData.isVerified}");
-                print("   - Is Active: ${userData.isActive}");
-
-                // Clean user type for comparison
-                final cleanUserType = userData.userType.trim().toLowerCase();
-                print("🧹 Cleaned user type: '$cleanUserType'");
-
-                // SIMPLIFIED ROUTING LOGIC
-                switch (cleanUserType) {
-                  case 'official':
-                    print("🏛️ OFFICIAL USER DETECTED");
-
-                    // Check if user has department
-                    if (userData.department == null ||
-                        userData.department!.trim().isEmpty) {
-                      print("❌ Official missing department");
-                      return _buildErrorScreen(
-                        "No department assigned. Please contact administrator.",
-                      );
-                    }
-
-                    // Check if account is active
-                    if (!userData.isActive) {
-                      print("❌ Official account inactive");
-                      return _buildErrorScreen(
-                        "Account is inactive. Please contact administrator.",
-                      );
-                    }
-
-                    print("✅ ROUTING TO DEPARTMENT DASHBOARD");
-                    print("🏢 Department: ${userData.department}");
-                    return DepartmentDashboard();
-
-                  case 'citizen':
-                    print("👤 CITIZEN USER → Home Screen");
-                    return HomeScreen();
-
-                  case 'admin':
-                    print("🔧 ADMIN USER → Admin Dashboard");
-                    return AdminDashboard();
-
-                  default:
-                    print("❓ UNKNOWN USER TYPE: '$cleanUserType'");
-                    print("🔄 Defaulting to Home Screen");
-                    return HomeScreen();
-                }
-              }
-
-              // No user data found
-              print("⚠️ AuthWrapper: No user data found");
-              final currentUser = snapshot.data;
-              if (currentUser != null) {
-                print("🔧 No user document for: ${currentUser.email}");
-                return _buildProfileSetupScreen(currentUser, context);
-              }
-
-              return HomeScreen();
-            },
-          );
+        // Handle connection errors
+        if (snapshot.hasError) {
+          print("❌ AuthWrapper: Stream error: ${snapshot.error}");
+          return _buildErrorScreen('Authentication error: ${snapshot.error}');
         }
 
-        // User not logged in
-        print("🔐 AuthWrapper: No authenticated user → Login");
+        // Check if user is authenticated
+        if (snapshot.hasData && snapshot.data != null) {
+          print("✅ AuthWrapper: User authenticated, loading user data...");
+          return _buildUserDataLoader(snapshot.data!);
+        }
+
+        // No authenticated user
+        print("🔐 AuthWrapper: No authenticated user, showing login");
         return LoginScreen();
       },
     );
+  }
+
+  Widget _buildUserDataLoader(User user) {
+    return FutureBuilder<UserModel?>(
+      future: AuthService().getUserData(forceRefresh: true),
+      builder: (context, userSnapshot) {
+        print(
+          "👤 AuthWrapper: User data state = ${userSnapshot.connectionState}",
+        );
+
+        if (userSnapshot.connectionState == ConnectionState.waiting) {
+          print("⏳ AuthWrapper: Loading user data...");
+          return _buildLoadingScreen();
+        }
+
+        if (userSnapshot.hasError) {
+          print("❌ AuthWrapper: User data error: ${userSnapshot.error}");
+          return _buildErrorScreen(
+            'Failed to load user profile: ${userSnapshot.error}',
+          );
+        }
+
+        if (userSnapshot.hasData && userSnapshot.data != null) {
+          return _buildUserInterface(userSnapshot.data!);
+        }
+
+        // No user data found - profile setup needed
+        print("⚠️ AuthWrapper: No user data found for ${user.email}");
+        return _buildProfileSetupScreen(user);
+      },
+    );
+  }
+
+  Widget _buildUserInterface(UserModel userData) {
+    print("🔍 AuthWrapper: Routing user interface...");
+    print("   - User Type: '${userData.userType}'");
+    print("   - Department: '${userData.department ?? 'null'}'");
+    print("   - Is Verified: ${userData.isVerified}");
+    print("   - Is Active: ${userData.isActive}");
+
+    final cleanUserType = userData.userType.trim().toLowerCase();
+    print("🧹 Cleaned user type: '$cleanUserType'");
+
+    switch (cleanUserType) {
+      case 'official':
+        print("🏛️ OFFICIAL USER ROUTING");
+
+        if (userData.department == null ||
+            userData.department!.trim().isEmpty) {
+          print("❌ Official missing department");
+          return _buildErrorScreen(
+            "No department assigned to your account. Please contact administrator.",
+          );
+        }
+
+        if (!userData.isActive) {
+          print("❌ Official account inactive");
+          return _buildErrorScreen(
+            "Your account is inactive. Please contact administrator.",
+          );
+        }
+
+        print("✅ ROUTING TO DEPARTMENT DASHBOARD");
+        print("🏢 Department: ${userData.department}");
+        return DepartmentDashboard();
+
+      case 'citizen':
+        print("👤 CITIZEN USER → Home Screen");
+        return HomeScreen();
+
+      case 'admin':
+        print("🔧 ADMIN USER → Admin Dashboard");
+        return AdminDashboard();
+
+      default:
+        print("❓ UNKNOWN USER TYPE: '$cleanUserType' → Defaulting to Home");
+        return HomeScreen();
+    }
   }
 
   Widget _buildLoadingScreen() {
@@ -266,20 +273,36 @@ class AuthWrapper extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    await AuthService().signOut();
-                  },
-                  icon: const Icon(Icons.logout),
-                  label: const Text('Sign Out & Try Again'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {}); // Force rebuild
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.red,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          await AuthService().signOut();
+                        },
+                        icon: const Icon(Icons.logout),
+                        label: const Text('Sign Out'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white.withOpacity(0.2),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -289,7 +312,7 @@ class AuthWrapper extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileSetupScreen(User user, BuildContext context) {
+  Widget _buildProfileSetupScreen(User user) {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(

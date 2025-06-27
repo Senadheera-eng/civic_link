@@ -69,7 +69,9 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       print("🔐 LoginScreen: Starting sign in attempt");
+      print("📧 Email: ${_emailController.text}");
 
+      // Clear any existing auth state
       await _authService.checkAuthState();
 
       final result = await _authService.signInWithEmail(
@@ -78,42 +80,59 @@ class _LoginScreenState extends State<LoginScreen>
       );
 
       if (result != null) {
-        print(
-          "✅ LoginScreen: Sign in successful, letting AuthWrapper handle routing",
+        print("✅ LoginScreen: Sign in successful");
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Sign in successful!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
         );
 
-        // Add a small delay to ensure Firestore is ready
-        await Future.delayed(const Duration(milliseconds: 1000));
+        // Wait a moment for Firestore to sync
+        await Future.delayed(Duration(milliseconds: 1500));
 
-        // Don't do manual routing here - let AuthWrapper handle it
-        // The AuthWrapper will automatically route based on the user type
-        print(
-          "🔄 LoginScreen: AuthWrapper should now handle routing based on user type",
-        );
+        // Force navigation to home - let AuthWrapper handle routing
+        if (mounted) {
+          print("🔄 LoginScreen: Forcing navigation to trigger AuthWrapper");
+          Navigator.pushReplacementNamed(context, '/');
+        }
       }
     } catch (e) {
       print("❌ LoginScreen: Sign in failed with error: $e");
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 8),
-              Expanded(child: Text(e.toString())),
-            ],
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text(e.toString())),
+              ],
+            ),
+            backgroundColor: ModernTheme.error,
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
-          backgroundColor: ModernTheme.error,
-          duration: const Duration(seconds: 5),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
