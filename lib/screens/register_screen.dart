@@ -164,8 +164,8 @@ class _RegisterScreenState extends State<RegisterScreen>
         print("🆔 Employee ID: ${_employeeIdController.text.trim()}");
       }
 
-      // Use test registration method
-      final result = await _authService.testRegistration(
+      // Use the FIXED registration method
+      final result = await _authService.registerWithEmail(
         _emailController.text,
         _passwordController.text,
         _fullNameController.text,
@@ -180,30 +180,39 @@ class _RegisterScreenState extends State<RegisterScreen>
 
       print("✅ Registration completed successfully");
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 12),
-              Text('Account created successfully!'),
-            ],
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Account created successfully! You can now sign in.'),
+              ],
+            ),
+            backgroundColor: ModernTheme.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
           ),
-          backgroundColor: ModernTheme.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+        );
 
-      Navigator.pop(context);
+        // Wait a moment then navigate back to login
+        await Future.delayed(const Duration(seconds: 1));
+        Navigator.pop(context);
+      }
     } catch (e) {
       print("❌ Registration failed: $e");
-      _showErrorSnackBar(e.toString());
+      if (mounted) {
+        _showErrorSnackBar(e.toString());
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
