@@ -45,6 +45,11 @@ android {
         release {
             signingConfig signingConfigs.debug
         }
+        debug {
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            applicationIdSuffix ""
+        }
     }
 }
 
