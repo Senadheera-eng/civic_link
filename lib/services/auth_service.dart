@@ -43,16 +43,37 @@ class AuthService {
       print("🆔 User UID: ${result.user?.uid}");
       print("✉️ Email verified: ${result.user?.emailVerified}");
 
-      // IMPORTANT: Clear any cached user data and force fresh fetch
-      print("🔄 Clearing cached user data and fetching fresh data...");
-
-      // Wait a moment for Firestore to be ready
+      // Wait for Firebase to fully process the authentication
       await Future.delayed(Duration(milliseconds: 500));
 
-      // Force refresh the user data from Firestore
-      final userData = await _getUserDataFresh(result.user!.uid);
-      print("📊 Fresh user data retrieved: ${userData?.toString()}");
+      // Verify the user is actually signed in
+      final currentUser = _auth.currentUser;
+      print("🔍 Current user after sign in: ${currentUser?.email ?? 'null'}");
 
+      if (currentUser == null) {
+        throw Exception(
+          'Sign in failed - no current user after authentication',
+        );
+      }
+
+      // Force refresh the auth state
+      await currentUser.reload();
+      print("🔄 User reloaded successfully");
+
+      // Test Firestore access
+      try {
+        print("📊 Testing Firestore access...");
+        final userData = await _getUserDataFresh(currentUser.uid);
+        print("📊 User data retrieved: ${userData?.toString() ?? 'null'}");
+
+        if (userData == null) {
+          print("⚠️ Warning: No user document found in Firestore");
+        }
+      } catch (e) {
+        print("⚠️ Warning: Firestore access test failed: $e");
+      }
+
+      print("✅ Sign in process completed successfully");
       return result;
     } on FirebaseAuthException catch (e) {
       print("❌ FirebaseAuthException occurred:");
@@ -201,9 +222,9 @@ class AuthService {
       print("👤 New user: ${result.user?.email}");
       print("🆔 User UID: ${result.user?.uid}");
 
-      // Create user document in Firestore with auto-verification
+      // Create user document in Firestore
       print("📄 Creating user document in Firestore...");
-      await _createVerifiedUserDocument(
+      await _createUserDocument(
         result.user!,
         fullName,
         userType,
@@ -220,6 +241,20 @@ class AuthService {
         print("✅ Welcome notification sent");
       } catch (e) {
         print("⚠️ Failed to send welcome notification: $e");
+      }
+
+      // Send department-specific welcome for officials
+      if (userType == 'official' && department != null) {
+        print("🏢 Sending department welcome notification...");
+        try {
+          await _sendDepartmentWelcomeNotification(
+            result.user!.uid,
+            department,
+          );
+          print("✅ Department welcome notification sent");
+        } catch (e) {
+          print("⚠️ Failed to send department welcome notification: $e");
+        }
       }
 
       print("🎉 Registration process completed successfully!");
@@ -244,76 +279,6 @@ class AuthService {
     } catch (e) {
       print("❌ General registration error: $e");
       throw 'Registration failed: ${e.toString()}';
-    }
-  }
-
-  // NEW METHOD: Create user document with automatic verification
-  Future<void> _createVerifiedUserDocument(
-    User user,
-    String fullName,
-    String userType, {
-    String? department,
-    String? employeeId,
-  }) async {
-    try {
-      print("📄 Creating VERIFIED user document for ${user.email}");
-      print("🏷️ User type: $userType");
-
-      // Create user data with AUTOMATIC VERIFICATION
-      final userData = <String, dynamic>{
-        'uid': user.uid,
-        'email': user.email ?? '',
-        'fullName': fullName,
-        'userType': userType,
-        'createdAt': FieldValue.serverTimestamp(),
-        'profilePicture': user.photoURL ?? '',
-        'isActive': true,
-        // AUTO-VERIFY ALL NEW ACCOUNTS
-        'isVerified': true,
-        'verifiedAt': FieldValue.serverTimestamp(),
-        'verifiedBy': 'auto_verification_on_registration',
-      };
-
-      // Add official-specific fields
-      if (userType == 'official') {
-        userData['department'] = department ?? '';
-        userData['employeeId'] = employeeId ?? '';
-        print(
-          "🏢 Added official fields - Department: $department, Employee ID: $employeeId",
-        );
-      }
-
-      print("💾 IMPORTANT: Setting isVerified = true for immediate access");
-      print("💾 Complete user data to save:");
-      userData.forEach((key, value) {
-        print("   $key: $value");
-      });
-
-      // Save to Firestore
-      await _firestore.collection('users').doc(user.uid).set(userData);
-      print("✅ User document saved to Firestore");
-
-      // VERIFY the document was created correctly
-      final verificationDoc =
-          await _firestore.collection('users').doc(user.uid).get();
-      if (verificationDoc.exists) {
-        final savedData = verificationDoc.data() as Map<String, dynamic>;
-        print("✅ VERIFICATION: Document exists in Firestore");
-        print("✅ VERIFICATION: isVerified = ${savedData['isVerified']}");
-        print("✅ VERIFICATION: userType = ${savedData['userType']}");
-        print("✅ VERIFICATION: department = ${savedData['department']}");
-
-        if (savedData['isVerified'] != true) {
-          print("❌ CRITICAL ERROR: isVerified is not true!");
-          throw 'User document created but verification failed';
-        }
-      } else {
-        print("❌ CRITICAL ERROR: Document not found after creation!");
-        throw 'User document was not created in Firestore';
-      }
-    } catch (e) {
-      print("❌ Error creating verified user document: $e");
-      throw 'Failed to create user profile: ${e.toString()}';
     }
   }
 
@@ -346,25 +311,98 @@ class AuthService {
       print("👤 Signed in user: ${result.user?.email}");
 
       // Check if user document exists, create if not
-      final existingDoc =
-          await _firestore.collection('users').doc(result.user!.uid).get();
-
-      if (!existingDoc.exists) {
-        print("📄 Creating new user document for Google user...");
-        await _createVerifiedUserDocument(
-          result.user!,
-          googleUser.displayName ?? 'Google User',
-          'citizen', // Google users default to citizen
-        );
-        print("✅ New user document created for Google user");
-      } else {
-        print("✅ Existing user document found for Google user");
-      }
+      await _createUserDocument(
+        result.user!,
+        googleUser.displayName ?? 'Google User',
+        'citizen', // Google users default to citizen
+      );
 
       return result;
     } catch (e) {
       print("❌ Google sign in error: $e");
       throw 'Google sign-in failed: ${e.toString()}';
+    }
+  }
+
+  Future<void> _createUserDocument(
+    User user,
+    String fullName,
+    String userType, {
+    String? department,
+    String? employeeId,
+  }) async {
+    try {
+      print("📄 Creating user document for ${user.email}");
+      print("🏷️ User type: $userType");
+      print("🏢 Department: $department");
+      print("🆔 Employee ID: $employeeId");
+
+      // Create basic user data with detailed logging
+      final userData = <String, dynamic>{
+        'uid': user.uid,
+        'email': user.email ?? '',
+        'fullName': fullName,
+        'userType': userType,
+        'createdAt': FieldValue.serverTimestamp(),
+        'profilePicture': user.photoURL ?? '',
+        'isActive': true,
+      };
+
+      // Add fields based on user type
+      if (userType == 'official') {
+        userData['department'] = department ?? '';
+        userData['employeeId'] = employeeId ?? '';
+        // AUTO-VERIFY OFFICIALS - No manual verification needed
+        userData['isVerified'] = true;
+        userData['verifiedAt'] = FieldValue.serverTimestamp();
+        userData['verifiedBy'] = 'auto_verification_on_registration';
+
+        print("🏢 Added official-specific fields:");
+        print("   - department: ${userData['department']}");
+        print("   - employeeId: ${userData['employeeId']}");
+        print("   - isVerified: ${userData['isVerified']} (AUTO-VERIFIED)");
+      } else {
+        userData['isVerified'] = true;
+        userData['verifiedAt'] = FieldValue.serverTimestamp();
+        print("👤 Set as verified citizen");
+      }
+
+      print("💾 Complete user data to save:");
+      userData.forEach((key, value) {
+        print("   $key: $value");
+      });
+
+      print("💾 Attempting to save to Firestore...");
+
+      // Try to write to Firestore with detailed error catching
+      await _firestore.collection('users').doc(user.uid).set(userData);
+
+      print("✅ User document created successfully in Firestore");
+
+      // Verify the document was created
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        print("✅ Document verification successful");
+        print("📄 Saved data: ${doc.data()}");
+      } else {
+        print("❌ Document verification failed - document doesn't exist");
+      }
+    } catch (e) {
+      print("❌ Error creating user document: $e");
+      print("❌ Error type: ${e.runtimeType}");
+
+      // Check specific error types
+      if (e.toString().contains('permission-denied')) {
+        print("🚫 PERMISSION DENIED ERROR");
+        print("🔧 Check your Firestore security rules");
+        throw 'Permission denied: Please check Firestore security rules';
+      } else if (e.toString().contains('unavailable')) {
+        print("🌐 NETWORK/SERVICE UNAVAILABLE ERROR");
+        throw 'Service unavailable: Please check your internet connection';
+      } else {
+        print("❓ UNKNOWN ERROR");
+        throw 'Failed to create user profile: ${e.toString()}';
+      }
     }
   }
 
@@ -415,7 +453,7 @@ class AuthService {
     String? employeeId,
   }) async {
     try {
-      print("🧪 STARTING TEST REGISTRATION WITH AUTO-VERIFICATION");
+      print("🧪 STARTING TEST REGISTRATION");
       print("📧 Email: $email");
       print("🏷️ User type: $userType");
 
@@ -428,22 +466,72 @@ class AuthService {
       print("✅ Firebase Auth user created successfully");
       print("🆔 UID: ${result.user?.uid}");
 
-      // Step 2: Create VERIFIED user document
-      print("\n👤 Step 2: Creating VERIFIED user document...");
-      await _createVerifiedUserDocument(
-        result.user!,
-        fullName,
-        userType,
-        department: department,
-        employeeId: employeeId,
-      );
+      // Step 2: Test basic Firestore write
+      print("\n📝 Step 2: Testing basic Firestore write...");
+      await _firestore.collection('test').doc('write_test').set({
+        'timestamp': FieldValue.serverTimestamp(),
+        'test': 'basic write test',
+      });
+      print("✅ Basic Firestore write successful");
+
+      // Step 3: Test user document creation
+      print("\n👤 Step 3: Creating user document...");
+
+      // Create minimal user document first
+      final minimalData = {
+        'uid': result.user!.uid,
+        'email': email,
+        'userType': userType,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      print("💾 Writing minimal user data: $minimalData");
+      await _firestore
+          .collection('users')
+          .doc(result.user!.uid)
+          .set(minimalData);
+      print("✅ Minimal user document created");
+
+      // Step 4: Add additional fields if official
+      if (userType == 'official') {
+        print("\n🏢 Step 4: Adding official fields...");
+        await _firestore.collection('users').doc(result.user!.uid).update({
+          'fullName': fullName,
+          'department': department,
+          'employeeId': employeeId,
+          'isVerified': false,
+          'isActive': true,
+        });
+        print("✅ Official fields added successfully");
+      } else {
+        print("\n👤 Step 4: Adding citizen fields...");
+        await _firestore.collection('users').doc(result.user!.uid).update({
+          'fullName': fullName,
+          'isVerified': true,
+          'isActive': true,
+        });
+        print("✅ Citizen fields added successfully");
+      }
+
+      // Step 5: Verify final document
+      print("\n🔍 Step 5: Verifying final document...");
+      final finalDoc =
+          await _firestore.collection('users').doc(result.user!.uid).get();
+
+      if (finalDoc.exists) {
+        print("✅ Final document verification successful");
+        print("📄 Final data: ${finalDoc.data()}");
+      }
+
+      // Clean up test document
+      await _firestore.collection('test').doc('write_test').delete();
 
       print("\n🎉 TEST REGISTRATION COMPLETED SUCCESSFULLY");
-      print("✅ User should be able to sign in immediately");
       return result;
     } catch (e) {
       print("\n❌ TEST REGISTRATION FAILED");
       print("❌ Error: $e");
+      print("❌ Error type: ${e.runtimeType}");
       throw e;
     }
   }
