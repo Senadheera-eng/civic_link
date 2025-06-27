@@ -9,6 +9,7 @@ import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/notification_screen.dart';
+import 'screens/profile_screen.dart';
 import 'services/auth_service.dart';
 import 'theme/simple_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart' show User;
@@ -30,6 +31,10 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        StreamProvider<UserModel?>.value(
+          value: AuthService().user,
+          initialData: null,
+        ),
       ],
       child: MyApp(),
     ),
@@ -50,6 +55,7 @@ class MyApp extends StatelessWidget {
         '/home': (context) => HomeScreen(),
         '/admin': (context) => AdminDashboard(),
         '/notifications': (context) => NotificationScreen(),
+        '/profile': (context) => ProfileScreen(),
       },
     );
   }

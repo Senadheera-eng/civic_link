@@ -7,6 +7,7 @@ import '../services/issue_service.dart';
 import '../models/user_model.dart';
 import '../models/issue_model.dart';
 import '../theme/modern_theme.dart';
+import '../screens/profile_screen.dart';
 import 'report_issue_screen.dart';
 import 'issue_detail_screen.dart';
 
@@ -302,6 +303,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     onSelected: (value) {
                       if (value == 'logout') _signOut();
+                      if (value == 'profile') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ProfileScreen(),
+                          ),
+                        );
+                      }
                     },
                     itemBuilder:
                         (context) => [

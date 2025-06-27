@@ -14,6 +14,26 @@ class AuthService {
     return _auth.authStateChanges();
   }
 
+  Stream<UserModel?> get user {
+    return _auth.authStateChanges().asyncMap((firebaseUser) async {
+      if (firebaseUser == null) {
+        print("🟥 Firebase user is null");
+        return null;
+      }
+
+      try {
+        final doc =
+            await _firestore.collection('users').doc(firebaseUser.uid).get();
+        print("✅ Firestore doc found: ${doc.exists}");
+        return UserModel.fromFirestore(doc);
+        // if (!doc.exists) return null;
+      } catch (e) {
+        print("❌ Error getting user for stream: $e");
+        return null;
+      }
+    });
+  }
+
   User? get currentUser {
     final user = _auth.currentUser;
     print("👤 AuthService: Current user = ${user?.email ?? 'null'}");
