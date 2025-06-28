@@ -69,7 +69,9 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       print("🔐 LoginScreen: Starting sign in attempt");
+      print("📧 Email: ${_emailController.text}");
 
+      // Clear any existing auth state
       await _authService.checkAuthState();
 
       final result = await _authService.signInWithEmail(
@@ -78,46 +80,59 @@ class _LoginScreenState extends State<LoginScreen>
       );
 
       if (result != null) {
-        print("✅ LoginScreen: Sign in successful, getting user data");
+        print("✅ LoginScreen: Sign in successful");
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Sign in successful!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
 
-        final userData = await _authService.getUserData();
-        if (userData != null) {
-          print("✅ LoginScreen: User data retrieved, navigating");
-          if (userData.isAdmin) {
-            Navigator.pushReplacementNamed(context, '/admin');
-          } else {
-            Navigator.pushReplacementNamed(context, '/home');
-          }
-        } else {
-          print("⚠️ LoginScreen: User data not found, going to home anyway");
-          Navigator.pushReplacementNamed(context, '/home');
+        // Wait a moment for Firestore to sync
+        await Future.delayed(Duration(milliseconds: 1500));
+
+        // Force navigation to home - let AuthWrapper handle routing
+        if (mounted) {
+          print("🔄 LoginScreen: Forcing navigation to trigger AuthWrapper");
+          Navigator.pushReplacementNamed(context, '/');
         }
       }
     } catch (e) {
       print("❌ LoginScreen: Sign in failed with error: $e");
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 8),
-              Expanded(child: Text(e.toString())),
-            ],
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text(e.toString())),
+              ],
+            ),
+            backgroundColor: ModernTheme.error,
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            margin: const EdgeInsets.all(16),
           ),
-          backgroundColor: ModernTheme.error,
-          duration: const Duration(seconds: 5),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -167,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen>
             child: SlideTransition(
               position: _slideAnimation,
               child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [

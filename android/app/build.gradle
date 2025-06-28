@@ -21,6 +21,7 @@ android {
     ndkVersion "27.0.12077973"
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
@@ -39,6 +40,7 @@ android {
         multiDexEnabled true
     }
 
+
     buildTypes {
         release {
             signingConfig signingConfigs.debug
@@ -51,6 +53,8 @@ flutter {
 }
 
 dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
+    implementation 'com.google.android.material:material:1.1.0-alpha09'
     implementation 'com.google.android.gms:play-services-auth:20.7.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22"
     implementation 'androidx.multidex:multidex:2.0.1'  // FIXED: multidx → multidex

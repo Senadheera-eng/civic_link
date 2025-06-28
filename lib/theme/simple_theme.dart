@@ -1,207 +1,153 @@
-// lib/theme/simple_theme.dart (LIGHTWEIGHT VERSION)
+// Create this file: lib/theme/simple_theme.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class SimpleTheme {
-  // Simple Color Palette
-  static const Color primaryBlue = Color(0xFF2196F3);
-  static const Color primaryDark = Color(0xFF1565C0);
-  static const Color accent = Color(0xFF00BCD4);
-  static const Color success = Color(0xFF4CAF50);
-  static const Color warning = Color(0xFFFF9800);
-  static const Color error = Color(0xFFE53935);
+  // Color Constants
+  static const Color primaryBlue = Color(0xFF2563EB);
+  static const Color primaryDark = Color(0xFF1E40AF);
+  static const Color accent = Color(0xFF06B6D4);
+  static const Color success = Color(0xFF10B981);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color error = Color(0xFFEF4444);
+  static const Color info = Color(0xFF3B82F6);
 
   // Background Colors
-  static const Color background = Color(0xFFF5F7FA);
-  static const Color surface = Colors.white;
+  static const Color background = Color(0xFFF8FAFC);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color surfaceVariant = Color(0xFFF1F5F9);
 
   // Text Colors
-  static const Color textPrimary = Color(0xFF212121);
-  static const Color textSecondary = Color(0xFF757575);
+  static const Color textPrimary = Color(0xFF0F172A);
+  static const Color textSecondary = Color(0xFF64748B);
+  static const Color textTertiary = Color(0xFF94A3B8);
 
   static ThemeData get lightTheme {
     return ThemeData(
-      primarySwatch: Colors.blue,
-      primaryColor: primaryBlue,
+      useMaterial3: true,
+      fontFamily: 'Inter',
+
+      colorScheme: const ColorScheme.light(
+        primary: primaryBlue,
+        primaryContainer: Color(0xFFDDE7FF),
+        secondary: accent,
+        secondaryContainer: Color(0xFFE0F7FA),
+        surface: surface,
+        surfaceVariant: surfaceVariant,
+        background: background,
+        error: error,
+        onPrimary: Colors.white,
+        onSecondary: Colors.white,
+        onSurface: textPrimary,
+        onBackground: textPrimary,
+        onError: Colors.white,
+      ),
+
       scaffoldBackgroundColor: background,
 
       appBarTheme: const AppBarTheme(
         backgroundColor: primaryBlue,
         foregroundColor: Colors.white,
-        elevation: 2,
+        elevation: 0,
         centerTitle: true,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         titleTextStyle: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: Colors.white,
+          letterSpacing: -0.5,
         ),
+        iconTheme: IconThemeData(color: Colors.white),
+        actionsIconTheme: IconThemeData(color: Colors.white),
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryBlue,
           foregroundColor: Colors.white,
-          elevation: 3,
+          elevation: 2,
+          shadowColor: primaryBlue.withOpacity(0.3),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: primaryBlue,
+          side: const BorderSide(color: primaryBlue, width: 1.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: primaryBlue,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
         ),
       ),
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: primaryBlue, width: 2),
-        ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
         ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: textTertiary.withOpacity(0.3)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: textTertiary.withOpacity(0.3)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: primaryBlue, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: error, width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: error, width: 2),
+        ),
+        labelStyle: const TextStyle(
+          color: textSecondary,
+          fontWeight: FontWeight.w500,
+        ),
+        hintStyle: const TextStyle(color: textTertiary),
       ),
 
-      cardTheme: CardThemeData(
-        color: surface,
-        elevation: 2,
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: textPrimary,
+        contentTextStyle: const TextStyle(color: Colors.white),
+        behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-}
-
-// Simple Custom Widgets
-class SimpleCard extends StatelessWidget {
-  final Widget child;
-  final Color? color;
-  final EdgeInsets? padding;
-  final VoidCallback? onTap;
-
-  const SimpleCard({
-    Key? key,
-    required this.child,
-    this.color,
-    this.padding,
-    this.onTap,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: color ?? SimpleTheme.surface,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: padding ?? const EdgeInsets.all(16),
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
-class ColorfulButton extends StatelessWidget {
-  final String text;
-  final VoidCallback? onPressed;
-  final Color? color;
-  final IconData? icon;
-  final bool isLoading;
-
-  const ColorfulButton({
-    Key? key,
-    required this.text,
-    this.onPressed,
-    this.color,
-    this.icon,
-    this.isLoading = false,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color ?? SimpleTheme.primaryBlue,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child:
-            isLoading
-                ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-                : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (icon != null) ...[
-                      Icon(icon, size: 20),
-                      const SizedBox(width: 8),
-                    ],
-                    Text(
-                      text,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-      ),
-    );
-  }
-}
-
-class StatusChip extends StatelessWidget {
-  final String text;
-  final Color color;
-  final IconData? icon;
-
-  const StatusChip({
-    Key? key,
-    required this.text,
-    required this.color,
-    this.icon,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, color: color, size: 14),
-            const SizedBox(width: 4),
-          ],
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }

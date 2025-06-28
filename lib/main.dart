@@ -1,4 +1,5 @@
-// main.dart (FIXED VERSION)
+// main.dart (SIMPLE COLORFUL VERSION)
+import 'package:civic_link/screens/setting_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,24 +14,53 @@ import 'services/settings_service.dart';
 import 'theme/simple_theme.dart';
 import 'theme/modern_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart' show User;
+import 'package:civic_link/services/notification_service.dart';
 import 'models/user_model.dart';
-import 'l10n/app_localizations.dart';
-import 'dart:ui' as ui;
+import 'services/settings_service.dart'; //for settings service
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    // Initialize Firebase FIRST with timeout
+    print("🔥 Initializing Firebase...");
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
-    );
+    ).timeout(Duration(seconds: 30));
     print("✅ Firebase initialized successfully");
 
-    // Initialize settings service
-    await SettingsService().initializeSettings();
-    print("✅ Settings service initialized");
+    // Test Firebase connection
+    try {
+      print("🧪 Testing Firebase connectivity...");
+      await FirebaseFirestore.instance.enableNetwork().timeout(
+        Duration(seconds: 10),
+      );
+      print("✅ Firebase Firestore network enabled");
+    } catch (e) {
+      print("⚠️ Firebase network test failed: $e");
+    }
+
+    // Initialize Notifications AFTER Firebase
+    print("🔔 Initializing Notifications...");
+    try {
+      await NotificationService().initialize().timeout(Duration(seconds: 15));
+      print("✅ Notifications initialized successfully");
+    } catch (e) {
+      print("⚠️ Notification initialization failed: $e");
+    }
+
+    // Initialize Settings
+    try {
+      await SettingsService().initializeSettings().timeout(
+        Duration(seconds: 10),
+      );
+      print("✅ Settings service initialized");
+    } catch (e) {
+      print("⚠️ Settings initialization failed: $e");
+    }
   } catch (e) {
     print("❌ Initialization failed: $e");
+    // Continue anyway - the app can still work with limited functionality
   }
 
   runApp(MyApp());
@@ -121,6 +151,7 @@ class _MyAppState extends State<MyApp> {
         '/register': (context) => RegisterScreen(),
         '/home': (context) => HomeScreen(),
         '/admin': (context) => AdminDashboard(),
+        '/department': (context) => DepartmentDashboard(),
         '/settings': (context) => SettingsScreen(),
       },
     );
@@ -253,13 +284,18 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
+  @override
+  _AuthWrapperState createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
       stream: AuthService().authStateChanges,
       builder: (context, snapshot) {
-        // Loading screen with proper theme support
+        // Simple loading screen
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
             body: Container(
@@ -270,47 +306,35 @@ class AuthWrapper extends StatelessWidget {
                   colors: [SimpleTheme.primaryBlue, SimpleTheme.primaryDark],
                 ),
               ),
-              child: Center(
+              child: const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // App logo
-                    const Icon(
-                      Icons.location_city,
-                      size: 80,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(height: 24),
+                    // Simple animated logo
+                    Icon(Icons.location_city, size: 80, color: Colors.white),
+                    SizedBox(height: 24),
                     Text(
-                      AppLocalizations.of(context)?.appTitle ?? 'CivicLink',
-                      style: const TextStyle(
+                      'CivicLink',
+                      style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
-                      AppLocalizations.of(context)?.appTagline ??
-                          'Report. Track. Resolve.',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white70,
-                      ),
+                      'Report. Track. Resolve.',
+                      style: TextStyle(fontSize: 16, color: Colors.white70),
                     ),
-                    const SizedBox(height: 48),
-                    const CircularProgressIndicator(
+                    SizedBox(height: 48),
+                    CircularProgressIndicator(
                       color: Colors.white,
                       strokeWidth: 3,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                     Text(
-                      AppLocalizations.of(context)?.loadingCivicLink ??
-                          'Loading CivicLink...',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 16,
-                      ),
+                      'Loading...',
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
                     ),
                   ],
                 ),
@@ -327,7 +351,7 @@ class AuthWrapper extends StatelessWidget {
               if (userSnapshot.connectionState == ConnectionState.waiting) {
                 return Scaffold(
                   body: Container(
-                    color: Theme.of(context).scaffoldBackgroundColor,
+                    color: SimpleTheme.background,
                     child: const Center(child: CircularProgressIndicator()),
                   ),
                 );
@@ -353,3 +377,5 @@ class AuthWrapper extends StatelessWidget {
     );
   }
 }
+
+// Import for compatibility

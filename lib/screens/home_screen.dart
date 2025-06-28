@@ -1,8 +1,13 @@
-// screens/home_screen.dart (WITH SETTINGS NAVIGATION)
+// screens/home_screen.dart (COMPLETE WITH REAL-TIME UPDATES)
 import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
+import 'package:civic_link/screens/notifications_screen.dart';
+import 'package:civic_link/services/notification_service.dart';
 import 'package:civic_link/screens/setting_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async'; // Add this for StreamSubscription
 import '../services/auth_service.dart';
 import '../services/issue_service.dart';
 import '../models/user_model.dart';
@@ -33,11 +38,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _pendingCount = 0;
   int _thisMonthCount = 0;
 
+  // Add stream subscription for real-time updates
+  StreamSubscription<List<IssueModel>>? _issuesSubscription;
+
   @override
   void initState() {
     super.initState();
     _initAnimations();
     _loadData();
+    _setupRealTimeUpdates(); // Add this line
   }
 
   void _initAnimations() {
@@ -67,30 +76,59 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _fadeController.dispose();
     _slideController.dispose();
+    _issuesSubscription?.cancel(); // Cancel subscription
     super.dispose();
+  }
+
+  // NEW: Setup real-time updates
+  void _setupRealTimeUpdates() {
+    print("🔄 Setting up real-time updates for home screen");
+
+    _issuesSubscription = _issueService.getUserIssuesStream().listen(
+      (issues) {
+        print("📊 Home screen received ${issues.length} issues from stream");
+        if (mounted) {
+          setState(() {
+            _userIssues = issues;
+            _calculateStatistics(issues);
+          });
+        }
+      },
+      onError: (error) {
+        print("❌ Error in issues stream: $error");
+      },
+    );
   }
 
   Future<void> _loadData() async {
     try {
+      print("🏠 Loading home screen data...");
+
       // Load user data
       final userData = await _authService.getUserData();
 
-      // Load user's issues
+      // Load user's issues (this will also trigger the stream)
       final userIssues = await _issueService.getUserIssues();
 
       // Calculate statistics
       _calculateStatistics(userIssues);
 
-      setState(() {
-        _userData = userData;
-        _userIssues = userIssues;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _userData = userData;
+          _userIssues = userIssues;
+          _isLoading = false;
+        });
+      }
+
+      print("✅ Home screen data loaded successfully");
     } catch (e) {
-      print('Error loading data: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      print("❌ Error loading home screen data: $e");
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -108,6 +146,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     _thisMonthCount =
         issues.where((issue) => issue.createdAt.isAfter(currentMonth)).length;
+
+    print(
+      "📊 Updated stats: Resolved: $_resolvedCount, Pending: $_pendingCount, This Month: $_thisMonthCount",
+    );
   }
 
   Future<void> _signOut() async {
@@ -172,6 +214,182 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  // UPDATED: Navigate to report issue and refresh on return
+  void _navigateToReportIssue() async {
+    print("🚀 Navigating to report issue screen...");
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ModernReportIssueScreen()),
+    );
+
+    // Check if an issue was successfully submitted
+    if (result == true) {
+      print("✅ Issue submitted successfully, refreshing home screen...");
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Issue submitted successfully!'),
+            ],
+          ),
+          backgroundColor: ModernTheme.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+
+      // Force refresh the data
+      await _loadData();
+    }
+  }
+
+  // Test method (you can remove this later)
+  Future<void> _testFirestoreConnection() async {
+    try {
+      print("🧪 Starting Firestore connection test...");
+
+      // Test basic authentication
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print("❌ No user authenticated");
+        _showErrorSnackBar("No user authenticated");
+        return;
+      }
+
+      print("👤 Current user: ${user.email} (${user.uid})");
+      print("🔒 Email verified: ${user.emailVerified}");
+
+      // Show loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Testing Firestore connection...'),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Test Firestore network connectivity
+      print("🌐 Testing Firestore network...");
+      await FirebaseFirestore.instance.enableNetwork();
+      print("✅ Firestore network enabled");
+
+      // Test reading issues
+      print("📋 Testing issues read access...");
+      final issuesQuery =
+          await FirebaseFirestore.instance
+              .collection('issues')
+              .where('userId', isEqualTo: user.uid)
+              .limit(5)
+              .get();
+      print("✅ Issues query successful: ${issuesQuery.docs.length} docs found");
+
+      // Test reading notifications
+      print("🔔 Testing notifications read access...");
+      final notificationsQuery =
+          await FirebaseFirestore.instance
+              .collection('notifications')
+              .where('userId', isEqualTo: user.uid)
+              .limit(5)
+              .get();
+      print(
+        "✅ Notifications query successful: ${notificationsQuery.docs.length} docs found",
+      );
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Firestore test passed! Issues: ${issuesQuery.docs.length}, Notifications: ${notificationsQuery.docs.length}',
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      print("❌ Firestore test failed: $e");
+
+      String errorMessage = 'Connection test failed';
+
+      if (e is FirebaseException) {
+        print("🔥 Firebase Exception: ${e.code} - ${e.message}");
+        switch (e.code) {
+          case 'permission-denied':
+            errorMessage = 'Permission denied - Check Firestore rules';
+            break;
+          case 'unavailable':
+            errorMessage = 'Service unavailable - Check internet';
+            break;
+          case 'unauthenticated':
+            errorMessage = 'Not authenticated - Please login again';
+            break;
+          default:
+            errorMessage = 'Firebase error: ${e.code}';
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text(errorMessage)),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -212,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: RefreshIndicator(
                 onRefresh: _loadData,
                 child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
+                  physics: const ClampingScrollPhysics(),
                   child: Column(
                     children: [
                       // Scrollable Header
@@ -250,6 +468,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
         ),
+      ),
+      // Test button (remove this when everything works)
+      floatingActionButton: FloatingActionButton(
+        onPressed: _testFirestoreConnection,
+        backgroundColor: Colors.red,
+        child: const Icon(Icons.bug_report, color: Colors.white),
+        tooltip: 'Test Firestore Connection',
       ),
     );
   }
@@ -580,13 +805,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               title: 'Track Issues',
               subtitle: 'Monitor your reports',
               gradient: ModernTheme.accentGradient,
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                // Also handle return from My Issues screen
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const MyIssuesScreen(),
                   ),
                 );
+                // Refresh if needed
+                if (result == true) {
+                  await _loadData();
+                }
               },
             ),
             _buildGradientActionCard(
@@ -603,16 +833,123 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 );
               },
             ),
-            _buildGradientActionCard(
-              icon: Icons.notifications_outlined,
-              title: 'Notifications',
-              subtitle: 'Stay updated',
-              gradient: ModernTheme.warningGradient,
-              onTap: () => _showComingSoon('Notifications'),
-            ),
+            _buildNotificationActionCard(),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildNotificationActionCard() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: ModernTheme.warningGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: ModernTheme.warningGradient.colors.first.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const NotificationsScreen(),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Stack(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_outlined,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                    // Notification badge
+                    FutureBuilder<int>(
+                      future: NotificationService().getUnreadCount(),
+                      builder: (context, snapshot) {
+                        final count = snapshot.data ?? 0;
+                        if (count == 0) return const SizedBox.shrink();
+
+                        return Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              count > 99 ? '99+' : count.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Notifications',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -0.3,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Stay updated',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withOpacity(0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -710,13 +1047,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
             TextButton.icon(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const MyIssuesScreen(),
                   ),
                 );
+                if (result == true) {
+                  await _loadData();
+                }
               },
               icon: const Icon(Icons.arrow_forward, size: 16),
               label: const Text('View All'),
@@ -959,17 +1299,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         margin: const EdgeInsets.all(16),
       ),
     );
-  }
-
-  void _navigateToReportIssue() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ModernReportIssueScreen()),
-    );
-
-    if (result == true) {
-      _loadData(); // Refresh data when returning from report screen
-    }
   }
 }
 // Add these widget definitions at the bottom of your home_screen.dart file
