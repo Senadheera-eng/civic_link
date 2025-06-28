@@ -1,3 +1,7 @@
+// main.dart (FIXED AuthWrapper with better debugging)
+import 'package:civic_link/screens/setting_screen.dart';
+import 'package:civic_link/screens/department_dashboard.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 // main.dart (FIXED VERSION)
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -13,24 +17,53 @@ import 'services/settings_service.dart';
 import 'theme/simple_theme.dart';
 import 'theme/modern_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart' show User;
+import 'package:civic_link/services/notification_service.dart';
 import 'models/user_model.dart';
-import 'l10n/app_localizations.dart';
-import 'dart:ui' as ui;
+import 'services/settings_service.dart'; //for settings service
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    // Initialize Firebase FIRST with timeout
+    print("🔥 Initializing Firebase...");
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
-    );
+    ).timeout(Duration(seconds: 30));
     print("✅ Firebase initialized successfully");
 
-    // Initialize settings service
-    await SettingsService().initializeSettings();
-    print("✅ Settings service initialized");
+    // Test Firebase connection
+    try {
+      print("🧪 Testing Firebase connectivity...");
+      await FirebaseFirestore.instance.enableNetwork().timeout(
+        Duration(seconds: 10),
+      );
+      print("✅ Firebase Firestore network enabled");
+    } catch (e) {
+      print("⚠️ Firebase network test failed: $e");
+    }
+
+    // Initialize Notifications AFTER Firebase
+    print("🔔 Initializing Notifications...");
+    try {
+      await NotificationService().initialize().timeout(Duration(seconds: 15));
+      print("✅ Notifications initialized successfully");
+    } catch (e) {
+      print("⚠️ Notification initialization failed: $e");
+    }
+
+    // Initialize Settings
+    try {
+      await SettingsService().initializeSettings().timeout(
+        Duration(seconds: 10),
+      );
+      print("✅ Settings service initialized");
+    } catch (e) {
+      print("⚠️ Settings initialization failed: $e");
+    }
   } catch (e) {
     print("❌ Initialization failed: $e");
+    // Continue anyway - the app can still work with limited functionality
   }
 
   runApp(MyApp());
@@ -121,203 +154,168 @@ class _MyAppState extends State<MyApp> {
         '/register': (context) => RegisterScreen(),
         '/home': (context) => HomeScreen(),
         '/admin': (context) => AdminDashboard(),
+        '/department': (context) => DepartmentDashboard(),
         '/settings': (context) => SettingsScreen(),
       },
     );
   }
-
-  // Enhanced dark theme
-  ThemeData _buildDarkTheme() {
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-
-      colorScheme: const ColorScheme.dark(
-        primary: ModernTheme.primaryBlue,
-        primaryContainer: Color(0xFF1A237E),
-        secondary: ModernTheme.secondary,
-        secondaryContainer: Color(0xFF4A148C),
-        surface: Color(0xFF121212),
-        surfaceVariant: Color(0xFF1E1E1E),
-        background: Color(0xFF0A0A0A),
-        error: ModernTheme.error,
-        onPrimary: Colors.white,
-        onSecondary: Colors.white,
-        onSurface: Colors.white,
-        onBackground: Colors.white,
-        onError: Colors.white,
-      ),
-
-      scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-
-      appBarTheme: const AppBarTheme(
-        backgroundColor: ModernTheme.primaryBlue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        titleTextStyle: TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-          letterSpacing: -0.5,
-        ),
-      ),
-
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: ModernTheme.primaryBlue,
-          foregroundColor: Colors.white,
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFF1E1E1E),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF404040)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF404040)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: ModernTheme.primaryBlue,
-            width: 2,
-          ),
-        ),
-        labelStyle: const TextStyle(color: Colors.white70),
-        hintStyle: const TextStyle(color: Colors.white38),
-      ),
-
-      cardTheme: CardThemeData(
-        color: const Color(0xFF1E1E1E),
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0xFF404040), width: 0.5),
-        ),
-      ),
-
-      switchTheme: SwitchThemeData(
-        thumbColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
-            return ModernTheme.primaryBlue;
-          }
-          return const Color(0xFF404040);
-        }),
-        trackColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
-            return ModernTheme.primaryBlue.withOpacity(0.5);
-          }
-          return const Color(0xFF2A2A2A);
-        }),
-      ),
-
-      listTileTheme: const ListTileThemeData(
-        textColor: Colors.white,
-        iconColor: Colors.white70,
-      ),
-
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(color: Colors.white),
-        displayMedium: TextStyle(color: Colors.white),
-        displaySmall: TextStyle(color: Colors.white),
-        headlineLarge: TextStyle(color: Colors.white),
-        headlineMedium: TextStyle(color: Colors.white),
-        headlineSmall: TextStyle(color: Colors.white),
-        titleLarge: TextStyle(color: Colors.white),
-        titleMedium: TextStyle(color: Colors.white),
-        titleSmall: TextStyle(color: Colors.white),
-        bodyLarge: TextStyle(color: Colors.white),
-        bodyMedium: TextStyle(color: Colors.white),
-        bodySmall: TextStyle(color: Colors.white70),
-        labelLarge: TextStyle(color: Colors.white),
-        labelMedium: TextStyle(color: Colors.white),
-        labelSmall: TextStyle(color: Colors.white70),
-      ),
-
-      iconTheme: const IconThemeData(color: Colors.white70),
-      primaryIconTheme: const IconThemeData(color: Colors.white),
-    );
-  }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
+  @override
+  _AuthWrapperState createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder(
       stream: AuthService().authStateChanges,
       builder: (context, snapshot) {
-        // Loading screen with proper theme support
+        print("🔄 AuthWrapper: Connection state = ${snapshot.connectionState}");
+        print("🔄 AuthWrapper: Has data = ${snapshot.hasData}");
+        print("🔄 AuthWrapper: Data = ${snapshot.data?.email ?? 'null'}");
+
+        // Show loading while waiting for auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(
-            body: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [SimpleTheme.primaryBlue, SimpleTheme.primaryDark],
-                ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // App logo
-                    const Icon(
-                      Icons.location_city,
-                      size: 80,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      AppLocalizations.of(context)?.appTitle ?? 'CivicLink',
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      AppLocalizations.of(context)?.appTagline ??
-                          'Report. Track. Resolve.',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white70,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-                    const CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 3,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      AppLocalizations.of(context)?.loadingCivicLink ??
-                          'Loading CivicLink...',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          print("⏳ AuthWrapper: Waiting for auth state...");
+          return _buildLoadingScreen();
+        }
+
+        // Handle connection errors
+        if (snapshot.hasError) {
+          print("❌ AuthWrapper: Stream error: ${snapshot.error}");
+          return _buildErrorScreen('Authentication error: ${snapshot.error}');
+        }
+
+        // Check if user is authenticated
+        if (snapshot.hasData && snapshot.data != null) {
+          print("✅ AuthWrapper: User authenticated, loading user data...");
+          return _buildUserDataLoader(snapshot.data!);
+        }
+
+        // No authenticated user
+        print("🔐 AuthWrapper: No authenticated user, showing login");
+        return LoginScreen();
+      },
+    );
+  }
+
+  Widget _buildUserDataLoader(User user) {
+    return FutureBuilder<UserModel?>(
+      future: AuthService().getUserData(forceRefresh: true),
+      builder: (context, userSnapshot) {
+        print(
+          "👤 AuthWrapper: User data state = ${userSnapshot.connectionState}",
+        );
+
+        if (userSnapshot.connectionState == ConnectionState.waiting) {
+          print("⏳ AuthWrapper: Loading user data...");
+          return _buildLoadingScreen();
+        }
+
+        if (userSnapshot.hasError) {
+          print("❌ AuthWrapper: User data error: ${userSnapshot.error}");
+          return _buildErrorScreen(
+            'Failed to load user profile: ${userSnapshot.error}',
           );
         }
+
+        if (userSnapshot.hasData && userSnapshot.data != null) {
+          return _buildUserInterface(userSnapshot.data!);
+        }
+
+        // No user data found - profile setup needed
+        print("⚠️ AuthWrapper: No user data found for ${user.email}");
+        return _buildProfileSetupScreen(user);
+      },
+    );
+  }
+
+  Widget _buildUserInterface(UserModel userData) {
+    print("🔍 AuthWrapper: Routing user interface...");
+    print("   - User Type: '${userData.userType}'");
+    print("   - Department: '${userData.department ?? 'null'}'");
+    print("   - Is Verified: ${userData.isVerified}");
+    print("   - Is Active: ${userData.isActive}");
+
+    final cleanUserType = userData.userType.trim().toLowerCase();
+    print("🧹 Cleaned user type: '$cleanUserType'");
+
+    switch (cleanUserType) {
+      case 'official':
+        print("🏛️ OFFICIAL USER ROUTING");
+
+        if (userData.department == null ||
+            userData.department!.trim().isEmpty) {
+          print("❌ Official missing department");
+          return _buildErrorScreen(
+            "No department assigned to your account. Please contact administrator.",
+          );
+        }
+
+        if (!userData.isActive) {
+          print("❌ Official account inactive");
+          return _buildErrorScreen(
+            "Your account is inactive. Please contact administrator.",
+          );
+        }
+
+        print("✅ ROUTING TO DEPARTMENT DASHBOARD");
+        print("🏢 Department: ${userData.department}");
+        return DepartmentDashboard();
+
+      case 'citizen':
+        print("👤 CITIZEN USER → Home Screen");
+        return HomeScreen();
+
+      case 'admin':
+        print("🔧 ADMIN USER → Admin Dashboard");
+        return AdminDashboard();
+
+      default:
+        print("❓ UNKNOWN USER TYPE: '$cleanUserType' → Defaulting to Home");
+        return HomeScreen();
+    }
+  }
+
+  Widget _buildLoadingScreen() {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [SimpleTheme.primaryBlue, SimpleTheme.primaryDark],
+          ),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.location_city, size: 80, color: Colors.white),
+              SizedBox(height: 24),
+              Text(
+                'CivicLink',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Loading your dashboard...',
+                style: TextStyle(fontSize: 16, color: Colors.white70),
+              ),
+              SizedBox(height: 48),
+              CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
         // Check if user is logged in
         if (snapshot.hasData && snapshot.data != null) {
@@ -327,29 +325,98 @@ class AuthWrapper extends StatelessWidget {
               if (userSnapshot.connectionState == ConnectionState.waiting) {
                 return Scaffold(
                   body: Container(
-                    color: Theme.of(context).scaffoldBackgroundColor,
+                    color: SimpleTheme.background,
                     child: const Center(child: CircularProgressIndicator()),
                   ),
                 );
               }
 
-              if (userSnapshot.hasData && userSnapshot.data != null) {
-                final userData = userSnapshot.data!;
-                if (userData.isAdmin) {
-                  return AdminDashboard();
-                } else {
-                  return HomeScreen();
-                }
-              }
-
-              return HomeScreen();
-            },
-          );
-        }
-
-        // User not logged in - show login
-        return LoginScreen();
-      },
+  Widget _buildProfileSetupScreen(User user) {
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [SimpleTheme.primaryBlue, SimpleTheme.primaryDark],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 3,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.person_add,
+                    size: 60,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                const Text(
+                  'Profile Setup Required',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Welcome ${user.email}!\nComplete your registration to continue.',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await AuthService().signOut();
+                    Navigator.pushReplacementNamed(context, '/register');
+                  },
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Complete Registration'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: SimpleTheme.primaryBlue,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () async {
+                    await AuthService().signOut();
+                  },
+                  child: const Text(
+                    'Sign Out',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

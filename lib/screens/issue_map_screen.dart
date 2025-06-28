@@ -1,6 +1,7 @@
-// screens/issue_map_screen.dart (REDESIGNED WITH LOCATION FILTERING)
+// screens/issue_map_screen.dart (ENHANCED WITH GOOGLE MAPS LOCATION PICKER)
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/issue_service.dart';
 import '../models/issue_model.dart';
 import '../theme/modern_theme.dart';
@@ -19,16 +20,25 @@ class _IssueMapScreenState extends State<IssueMapScreen>
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
+  // Google Maps
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
+
   List<IssueModel> _allIssues = [];
   List<IssueModel> _nearbyIssues = [];
   Position? _currentLocation;
+  LatLng? _selectedLocation; // New: User selected location
   bool _isLoading = true;
   bool _isGettingLocation = false;
 
+  // UI State
+  bool _showMapView = false; // Toggle between list and map view
+  String _locationMode = 'current'; // 'current' or 'selected'
+
   // Filters
   String _selectedCategory = 'All';
-  double _radiusKm = 5.0; // Default 5km radius
-  String _selectedLocationFilter = 'nearby'; // 'nearby', 'city', 'all'
+  double _radiusKm = 5.0;
+  String _selectedLocationFilter = 'nearby';
 
   @override
   void initState() {
@@ -52,6 +62,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
   @override
   void dispose() {
     _fadeController.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -70,8 +81,9 @@ class _IssueMapScreenState extends State<IssueMapScreen>
         _isLoading = false;
       });
 
-      // Filter nearby issues
+      // Filter nearby issues and update map markers
       _filterNearbyIssues();
+      _updateMapMarkers();
     } catch (e) {
       setState(() => _isLoading = false);
       _showErrorSnackBar('Error loading issues: $e');
@@ -114,7 +126,19 @@ class _IssueMapScreenState extends State<IssueMapScreen>
   }
 
   void _filterNearbyIssues() {
-    if (_currentLocation == null) return;
+    LatLng? centerLocation;
+
+    // Determine center location based on mode
+    if (_locationMode == 'selected' && _selectedLocation != null) {
+      centerLocation = _selectedLocation;
+    } else if (_locationMode == 'current' && _currentLocation != null) {
+      centerLocation = LatLng(
+        _currentLocation!.latitude,
+        _currentLocation!.longitude,
+      );
+    }
+
+    if (centerLocation == null) return;
 
     List<IssueModel> filteredIssues = [];
 
@@ -123,8 +147,8 @@ class _IssueMapScreenState extends State<IssueMapScreen>
         // Filter by radius
         for (var issue in _allIssues) {
           double distanceInMeters = Geolocator.distanceBetween(
-            _currentLocation!.latitude,
-            _currentLocation!.longitude,
+            centerLocation.latitude,
+            centerLocation.longitude,
             issue.latitude,
             issue.longitude,
           );
@@ -135,18 +159,18 @@ class _IssueMapScreenState extends State<IssueMapScreen>
         }
         break;
       case 'city':
-        // Filter by city (you can implement city detection logic)
-        filteredIssues =
-            _allIssues.where((issue) {
-              // Simple city filtering - you can improve this with reverse geocoding
-              double distanceInMeters = Geolocator.distanceBetween(
-                _currentLocation!.latitude,
-                _currentLocation!.longitude,
-                issue.latitude,
-                issue.longitude,
-              );
-              return distanceInMeters <= 20000; // 20km for city
-            }).toList();
+        // Filter by city (20km radius)
+        for (var issue in _allIssues) {
+          double distanceInMeters = Geolocator.distanceBetween(
+            centerLocation.latitude,
+            centerLocation.longitude,
+            issue.latitude,
+            issue.longitude,
+          );
+          if (distanceInMeters <= 20000) {
+            filteredIssues.add(issue);
+          }
+        }
         break;
       case 'all':
         filteredIssues = _allIssues;
@@ -162,27 +186,135 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     }
 
     // Sort by distance (nearest first)
-    if (_currentLocation != null) {
-      filteredIssues.sort((a, b) {
-        double distanceA = Geolocator.distanceBetween(
-          _currentLocation!.latitude,
-          _currentLocation!.longitude,
-          a.latitude,
-          a.longitude,
-        );
-        double distanceB = Geolocator.distanceBetween(
-          _currentLocation!.latitude,
-          _currentLocation!.longitude,
-          b.latitude,
-          b.longitude,
-        );
-        return distanceA.compareTo(distanceB);
-      });
-    }
+    filteredIssues.sort((a, b) {
+      double distanceA = Geolocator.distanceBetween(
+        centerLocation!.latitude,
+        centerLocation.longitude,
+        a.latitude,
+        a.longitude,
+      );
+      double distanceB = Geolocator.distanceBetween(
+        centerLocation.latitude,
+        centerLocation.longitude,
+        b.latitude,
+        b.longitude,
+      );
+      return distanceA.compareTo(distanceB);
+    });
 
     setState(() {
       _nearbyIssues = filteredIssues;
     });
+  }
+
+  void _updateMapMarkers() {
+    if (_mapController == null) return;
+
+    Set<Marker> markers = {};
+
+    // Add issue markers
+    for (var issue in _nearbyIssues) {
+      markers.add(
+        Marker(
+          markerId: MarkerId(issue.id),
+          position: LatLng(issue.latitude, issue.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            _getMarkerColor(issue.status),
+          ),
+          infoWindow: InfoWindow(
+            title: issue.title,
+            snippet: issue.category,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => IssueDetailScreen(issue: issue),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    // Add current location marker
+    if (_currentLocation != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('current_location'),
+          position: LatLng(
+            _currentLocation!.latitude,
+            _currentLocation!.longitude,
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          infoWindow: const InfoWindow(title: 'Your Location'),
+        ),
+      );
+    }
+
+    // Add selected location marker
+    if (_selectedLocation != null) {
+      markers.add(
+        Marker(
+          markerId: const MarkerId('selected_location'),
+          position: _selectedLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueViolet,
+          ),
+          infoWindow: const InfoWindow(title: 'Selected Location'),
+        ),
+      );
+    }
+
+    setState(() {
+      _markers = markers;
+    });
+  }
+
+  double _getMarkerColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return BitmapDescriptor.hueOrange;
+      case 'in_progress':
+        return BitmapDescriptor.hueYellow;
+      case 'resolved':
+        return BitmapDescriptor.hueGreen;
+      case 'rejected':
+        return BitmapDescriptor.hueRed;
+      default:
+        return BitmapDescriptor.hueRed;
+    }
+  }
+
+  void _onMapTap(LatLng location) {
+    setState(() {
+      _selectedLocation = location;
+      _locationMode = 'selected';
+    });
+
+    _filterNearbyIssues();
+    _updateMapMarkers();
+
+    _showSuccessSnackBar('Location selected! Showing nearby issues.');
+  }
+
+  void _moveToCurrentLocation() {
+    if (_currentLocation != null && _mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
+          14.0,
+        ),
+      );
+
+      setState(() {
+        _locationMode = 'current';
+        _selectedLocation = null;
+      });
+
+      _filterNearbyIssues();
+      _updateMapMarkers();
+    }
   }
 
   @override
@@ -209,8 +341,14 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                     child: Column(
                       children: [
                         _buildLocationStatus(),
-                        _buildFilters(),
-                        Expanded(child: _buildIssuesList()),
+                        _buildViewToggle(),
+                        if (!_showMapView) _buildFilters(),
+                        Expanded(
+                          child:
+                              _showMapView
+                                  ? _buildMapView()
+                                  : _buildIssuesList(),
+                        ),
                       ],
                     ),
                   ),
@@ -270,7 +408,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
             ),
             child: IconButton(
               icon: const Icon(Icons.my_location, color: Colors.white),
-              onPressed: _getCurrentLocation,
+              onPressed: _moveToCurrentLocation,
             ),
           ),
         ],
@@ -279,31 +417,43 @@ class _IssueMapScreenState extends State<IssueMapScreen>
   }
 
   Widget _buildLocationStatus() {
+    String statusText;
+    String subtitleText;
+    Color statusColor;
+    IconData statusIcon;
+
+    if (_locationMode == 'selected') {
+      statusText = 'Custom Location Selected';
+      subtitleText = 'Showing issues around selected location';
+      statusColor = ModernTheme.accent;
+      statusIcon = Icons.location_on;
+    } else if (_currentLocation != null) {
+      statusText = 'Current Location';
+      subtitleText = 'Showing issues within ${_radiusKm}km radius';
+      statusColor = ModernTheme.success;
+      statusIcon = Icons.location_on;
+    } else {
+      statusText = 'Getting Location...';
+      subtitleText = 'Enable location to see nearby issues';
+      statusColor = ModernTheme.warning;
+      statusIcon = Icons.location_searching;
+    }
+
     return Container(
       margin: const EdgeInsets.all(24),
       child: ModernCard(
-        color:
-            _currentLocation != null
-                ? ModernTheme.success.withOpacity(0.1)
-                : ModernTheme.warning.withOpacity(0.1),
+        color: statusColor.withOpacity(0.1),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                gradient:
-                    _currentLocation != null
-                        ? ModernTheme.successGradient
-                        : ModernTheme.warningGradient,
+                gradient: LinearGradient(
+                  colors: [statusColor, statusColor.withOpacity(0.8)],
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                _currentLocation != null
-                    ? Icons.location_on
-                    : Icons.location_searching,
-                color: Colors.white,
-                size: 24,
-              ),
+              child: Icon(statusIcon, color: Colors.white, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -311,25 +461,16 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _currentLocation != null
-                        ? 'Location Found'
-                        : _isGettingLocation
-                        ? 'Getting Location...'
-                        : 'Location Required',
+                    statusText,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color:
-                          _currentLocation != null
-                              ? ModernTheme.success
-                              : ModernTheme.warning,
+                      color: statusColor,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _currentLocation != null
-                        ? 'Showing issues within ${_radiusKm}km radius'
-                        : 'Enable location to see nearby issues',
+                    subtitleText,
                     style: const TextStyle(
                       fontSize: 14,
                       color: ModernTheme.textSecondary,
@@ -347,6 +488,249 @@ class _IssueMapScreenState extends State<IssueMapScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildViewToggle() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _showMapView = false),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: !_showMapView ? ModernTheme.primaryGradient : null,
+                  color: !_showMapView ? null : ModernTheme.surface,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                  ),
+                  border: Border.all(
+                    color:
+                        !_showMapView
+                            ? Colors.transparent
+                            : ModernTheme.textTertiary.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.list,
+                      color:
+                          !_showMapView
+                              ? Colors.white
+                              : ModernTheme.textSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'List View',
+                      style: TextStyle(
+                        color:
+                            !_showMapView
+                                ? Colors.white
+                                : ModernTheme.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _showMapView = true),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: _showMapView ? ModernTheme.primaryGradient : null,
+                  color: _showMapView ? null : ModernTheme.surface,
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                  ),
+                  border: Border.all(
+                    color:
+                        _showMapView
+                            ? Colors.transparent
+                            : ModernTheme.textTertiary.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.map,
+                      color:
+                          _showMapView
+                              ? Colors.white
+                              : ModernTheme.textSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Map View',
+                      style: TextStyle(
+                        color:
+                            _showMapView
+                                ? Colors.white
+                                : ModernTheme.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapView() {
+    if (_currentLocation == null) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading map...'),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Map Instructions
+        Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: ModernTheme.accentGradient,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.touch_app, color: Colors.white, size: 20),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Tap anywhere on the map to select a location and find nearby issues!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Radius Selector for Map View
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: ModernTheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: ModernTheme.textTertiary.withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Text(
+                'Radius: ',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: ModernTheme.textSecondary,
+                ),
+              ),
+              Text(
+                '${_radiusKm.toStringAsFixed(1)}km',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.primaryBlue,
+                ),
+              ),
+              Expanded(
+                child: Slider(
+                  value: _radiusKm,
+                  min: 0.5,
+                  max: 50.0,
+                  divisions: 50,
+                  activeColor: ModernTheme.primaryBlue,
+                  onChanged: (value) {
+                    setState(() => _radiusKm = value);
+                    _filterNearbyIssues();
+                    _updateMapMarkers();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Google Maps Widget
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: ModernTheme.cardShadow,
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: GoogleMap(
+              onMapCreated: (GoogleMapController controller) {
+                _mapController = controller;
+                _updateMapMarkers();
+              },
+              initialCameraPosition: CameraPosition(
+                target: LatLng(
+                  _currentLocation!.latitude,
+                  _currentLocation!.longitude,
+                ),
+                zoom: 14.0,
+              ),
+              markers: _markers,
+              onTap: _onMapTap,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
+            ),
+          ),
+        ),
+
+        // Issues count
+        Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            gradient: ModernTheme.primaryGradient,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '${_nearbyIssues.length} Issues Found',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -415,9 +799,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                     divisions: 50,
                     activeColor: ModernTheme.primaryBlue,
                     onChanged: (value) {
-                      setState(() {
-                        _radiusKm = value;
-                      });
+                      setState(() => _radiusKm = value);
                       _filterNearbyIssues();
                     },
                   ),
@@ -428,7 +810,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
 
           const SizedBox(height: 16),
 
-          // Category Filter with Dropdown
+          // Category Filter
           const Text(
             'Category',
             style: TextStyle(
@@ -449,9 +831,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     final isSelected = _selectedLocationFilter == value;
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _selectedLocationFilter = value;
-        });
+        setState(() => _selectedLocationFilter = value);
         _filterNearbyIssues();
       },
       child: Container(
@@ -585,61 +965,10 @@ class _IssueMapScreenState extends State<IssueMapScreen>
               }).toList(),
           onChanged: (String? newValue) {
             if (newValue != null) {
-              setState(() {
-                _selectedCategory = newValue;
-              });
+              setState(() => _selectedCategory = newValue);
               _filterNearbyIssues();
             }
           },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryChip(String category, IconData icon, Color color) {
-    final isSelected = _selectedCategory == category;
-    final displayText =
-        category == 'Road & Transportation'
-            ? 'Roads'
-            : category == 'Water & Sewerage'
-            ? 'Water'
-            : category == 'Public Safety'
-            ? 'Safety'
-            : category;
-
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedCategory = category;
-          });
-          _filterNearbyIssues();
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? color : ModernTheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected ? color : color.withOpacity(0.3),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: isSelected ? Colors.white : color),
-              const SizedBox(width: 4),
-              Text(
-                displayText,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -659,7 +988,17 @@ class _IssueMapScreenState extends State<IssueMapScreen>
       );
     }
 
-    if (_currentLocation == null) {
+    LatLng? centerLocation;
+    if (_locationMode == 'selected' && _selectedLocation != null) {
+      centerLocation = _selectedLocation;
+    } else if (_locationMode == 'current' && _currentLocation != null) {
+      centerLocation = LatLng(
+        _currentLocation!.latitude,
+        _currentLocation!.longitude,
+      );
+    }
+
+    if (centerLocation == null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -687,7 +1026,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
             ),
             const SizedBox(height: 8),
             const Text(
-              'Please enable location access to see nearby issues',
+              'Please enable location access or select a location on the map',
               style: TextStyle(fontSize: 16, color: ModernTheme.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -773,7 +1112,9 @@ class _IssueMapScreenState extends State<IssueMapScreen>
               ),
               const Spacer(),
               Text(
-                _selectedLocationFilter == 'nearby'
+                _locationMode == 'selected'
+                    ? 'At selected location'
+                    : _selectedLocationFilter == 'nearby'
                     ? 'Within ${_radiusKm.toStringAsFixed(1)}km'
                     : _selectedLocationFilter == 'city'
                     ? 'In your city'
@@ -795,15 +1136,12 @@ class _IssueMapScreenState extends State<IssueMapScreen>
             itemCount: _nearbyIssues.length,
             itemBuilder: (context, index) {
               final issue = _nearbyIssues[index];
-              final distance =
-                  _currentLocation != null
-                      ? Geolocator.distanceBetween(
-                        _currentLocation!.latitude,
-                        _currentLocation!.longitude,
-                        issue.latitude,
-                        issue.longitude,
-                      )
-                      : 0.0;
+              final distance = Geolocator.distanceBetween(
+                centerLocation!.latitude,
+                centerLocation.longitude,
+                issue.latitude,
+                issue.longitude,
+              );
 
               return _buildIssueCard(issue, distance);
             },
@@ -923,7 +1261,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    issue.category.split(' ').first, // Show first word only
+                    issue.category.split(' ').first,
                     style: const TextStyle(
                       fontSize: 10,
                       color: ModernTheme.primaryBlue,
@@ -1073,6 +1411,24 @@ class _IssueMapScreenState extends State<IssueMapScreen>
           ],
         ),
         backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(message),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
