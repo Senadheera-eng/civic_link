@@ -1,42 +1,916 @@
+// screens/notifications_screen.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/notification_provider.dart';
+import '../services/notification_service.dart';
+import '../models/notification_model.dart';
+import '../theme/modern_theme.dart';
+import 'issue_detail_screen.dart';
 
-class NotificationScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
+  const NotificationsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with TickerProviderStateMixin {
+  final NotificationService _notificationService = NotificationService();
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
+
+  bool _showUnreadOnly = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAnimations();
+  }
+
+  void _initAnimations() {
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+    _fadeController.forward();
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final notifications =
-        Provider.of<NotificationProvider>(context).notifications;
-
     return Scaffold(
-      appBar: AppBar(title: Text('Notifications')),
-      body:
-          notifications.isEmpty
-              ? Center(child: Text("No notifications"))
-              : ListView.builder(
-                itemCount: notifications.length,
-                itemBuilder: (context, index) {
-                  final n = notifications[index];
-                  return ListTile(
-                    title: Text(n.title),
-                    subtitle: Text(n.message),
-                    trailing: Text(
-                      "${n.timestamp.hour.toString().padLeft(2, '0')}:${n.timestamp.minute.toString().padLeft(2, '0')}",
-                      style: TextStyle(fontSize: 12),
+      body: Container(
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: Column(
+              children: [
+                _buildModernHeader(),
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    decoration: const BoxDecoration(
+                      color: ModernTheme.background,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
                     ),
-                    tileColor: n.isRead ? Colors.white : Colors.blue.shade50,
-                  );
-                },
+                    child: Column(
+                      children: [
+                        _buildFilterControls(),
+                        Expanded(child: _buildNotificationsList()),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Notifications',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                Text(
+                  'Stay updated with your issues',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              onSelected: (value) {
+                switch (value) {
+                  case 'mark_all_read':
+                    _markAllAsRead();
+                    break;
+                  case 'settings':
+                    _openNotificationSettings();
+                    break;
+                }
+              },
+              itemBuilder:
+                  (context) => [
+                    const PopupMenuItem(
+                      value: 'mark_all_read',
+                      child: Row(
+                        children: [
+                          Icon(Icons.done_all),
+                          SizedBox(width: 12),
+                          Text('Mark all as read'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'settings',
+                      child: Row(
+                        children: [
+                          Icon(Icons.settings),
+                          SizedBox(width: 12),
+                          Text('Notification Settings'),
+                        ],
+                      ),
+                    ),
+                  ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterControls() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        children: [
+          const Text(
+            'Show:',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: ModernTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Row(
+              children: [
+                _buildFilterChip('All', !_showUnreadOnly),
+                const SizedBox(width: 12),
+                _buildFilterChip('Unread', _showUnreadOnly),
+              ],
+            ),
+          ),
+          FutureBuilder<int>(
+            future: _notificationService.getUnreadCount(),
+            builder: (context, snapshot) {
+              final unreadCount = snapshot.data ?? 0;
+              if (unreadCount == 0) return const SizedBox.shrink();
+
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: ModernTheme.errorGradient,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$unreadCount unread',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, bool isSelected) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _showUnreadOnly = label == 'Unread';
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: isSelected ? ModernTheme.primaryGradient : null,
+          color: isSelected ? null : ModernTheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color:
+                isSelected
+                    ? Colors.transparent
+                    : ModernTheme.textTertiary.withOpacity(0.3),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : ModernTheme.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationsList() {
+    return StreamBuilder<List<NotificationModel>>(
+      stream: _notificationService.getUserNotificationsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingState();
+        }
+
+        if (snapshot.hasError) {
+          return _buildErrorState();
+        }
+
+        List<NotificationModel> notifications = snapshot.data ?? [];
+
+        // Filter notifications if needed
+        if (_showUnreadOnly) {
+          notifications = notifications.where((n) => !n.isRead).toList();
+        }
+
+        if (notifications.isEmpty) {
+          return _buildEmptyState();
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          physics: const BouncingScrollPhysics(),
+          itemCount: notifications.length,
+          itemBuilder: (context, index) {
+            return _buildNotificationCard(notifications[index]);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildNotificationCard(NotificationModel notification) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ModernCard(
+        color:
+            notification.isRead
+                ? ModernTheme.surface
+                : ModernTheme.primaryBlue.withOpacity(0.05),
+        onTap: () => _handleNotificationTap(notification),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Notification Icon
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: _getNotificationGradient(notification.type),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _getNotificationColor(
+                          notification.type,
+                        ).withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    notification.icon,
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                ),
+
+                const SizedBox(width: 16),
+
+                // Notification Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              notification.title,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight:
+                                    notification.isRead
+                                        ? FontWeight.w600
+                                        : FontWeight.bold,
+                                color: ModernTheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                          if (!notification.isRead)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: ModernTheme.primaryBlue,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      Text(
+                        notification.body,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color:
+                              notification.isRead
+                                  ? ModernTheme.textSecondary
+                                  : ModernTheme.textPrimary,
+                          height: 1.4,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      Row(
+                        children: [
+                          Text(
+                            notification.timeAgo,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: ModernTheme.textTertiary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const Spacer(),
+                          _buildNotificationTypeChip(notification.type),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Action Menu
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: ModernTheme.textSecondary,
+                    size: 20,
+                  ),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'mark_read':
+                        if (!notification.isRead) {
+                          _notificationService.markAsRead(notification.id);
+                        }
+                        break;
+                      case 'delete':
+                        _deleteNotification(notification);
+                        break;
+                    }
+                  },
+                  itemBuilder:
+                      (context) => [
+                        if (!notification.isRead)
+                          const PopupMenuItem(
+                            value: 'mark_read',
+                            child: Row(
+                              children: [
+                                Icon(Icons.done, size: 18),
+                                SizedBox(width: 8),
+                                Text('Mark as read'),
+                              ],
+                            ),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete, size: 18, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationTypeChip(String type) {
+    Color color = _getNotificationColor(type);
+    String label = _getNotificationTypeLabel(type);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Loading notifications...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: ModernTheme.errorGradient,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Error loading notifications',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: ModernTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GradientButton(
+            text: 'Retry',
+            onPressed: () => setState(() {}),
+            width: 120,
+            height: 44,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: ModernTheme.accentGradient,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.notifications_none,
+              size: 48,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            _showUnreadOnly
+                ? 'No unread notifications'
+                : 'No notifications yet',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: ModernTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _showUnreadOnly
+                ? 'All caught up! Check back later for updates.'
+                : 'You\'ll see notifications about your issues here.',
+            style: const TextStyle(
+              fontSize: 16,
+              color: ModernTheme.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper methods
+  Color _getNotificationColor(String type) {
+    switch (type) {
+      case 'issue_update':
+        return ModernTheme.primaryBlue;
+      case 'welcome':
+        return ModernTheme.success;
+      case 'system_update':
+        return ModernTheme.warning;
+      case 'reminder':
+        return ModernTheme.accent;
+      default:
+        return ModernTheme.textSecondary;
+    }
+  }
+
+  LinearGradient _getNotificationGradient(String type) {
+    switch (type) {
+      case 'issue_update':
+        return ModernTheme.primaryGradient;
+      case 'welcome':
+        return ModernTheme.successGradient;
+      case 'system_update':
+        return ModernTheme.warningGradient;
+      case 'reminder':
+        return ModernTheme.accentGradient;
+      default:
+        return ModernTheme.primaryGradient;
+    }
+  }
+
+  String _getNotificationTypeLabel(String type) {
+    switch (type) {
+      case 'issue_update':
+        return 'Issue Update';
+      case 'welcome':
+        return 'Welcome';
+      case 'system_update':
+        return 'System';
+      case 'reminder':
+        return 'Reminder';
+      default:
+        return 'General';
+    }
+  }
+
+  void _handleNotificationTap(NotificationModel notification) {
+    // Mark as read if not already read
+    if (!notification.isRead) {
+      _notificationService.markAsRead(notification.id);
+    }
+
+    // Navigate based on notification type
+    switch (notification.type) {
+      case 'issue_update':
+        final issueId = notification.data['issueId'];
+        if (issueId != null) {
+          _navigateToIssueDetail(issueId);
+        }
+        break;
+      case 'welcome':
+        // Navigate to home or show welcome flow
+        Navigator.pop(context);
+        break;
+      default:
+        // Handle other notification types
+        break;
+    }
+  }
+
+  void _navigateToIssueDetail(String issueId) {
+    // This would require loading the issue first
+    // For now, just show a message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Navigate to issue: $issueId'),
+        backgroundColor: ModernTheme.primaryBlue,
+      ),
+    );
+  }
+
+  void _markAllAsRead() async {
+    await _notificationService.markAllAsRead();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.done_all, color: Colors.white),
+            SizedBox(width: 12),
+            Text('All notifications marked as read'),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
+      ),
+    );
+  }
+
+  void _deleteNotification(NotificationModel notification) async {
+    await _notificationService.deleteNotification(notification.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.delete, color: Colors.white),
+            SizedBox(width: 12),
+            Text('Notification deleted'),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+      ),
+    );
+  }
+
+  void _openNotificationSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const NotificationSettingsScreen(),
+      ),
+    );
+  }
+}
+
+// Notification Settings Screen
+class NotificationSettingsScreen extends StatefulWidget {
+  const NotificationSettingsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<NotificationSettingsScreen> createState() =>
+      _NotificationSettingsScreenState();
+}
+
+class _NotificationSettingsScreenState
+    extends State<NotificationSettingsScreen> {
+  final NotificationService _notificationService = NotificationService();
+
+  bool _pushNotifications = true;
+  bool _issueUpdates = true;
+  bool _systemUpdates = false;
+  bool _emailNotifications = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Notification Settings',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          Text(
+                            'Manage your preferences',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: "Mark all as read",
-        child: Icon(Icons.done_all),
-        onPressed:
-            () =>
-                Provider.of<NotificationProvider>(
-                  context,
-                  listen: false,
-                ).markAllAsRead(),
+
+              // Settings Content
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 16),
+                  decoration: const BoxDecoration(
+                    color: ModernTheme.background,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(32),
+                      topRight: Radius.circular(32),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        _buildSettingCard(
+                          title: 'Push Notifications',
+                          subtitle: 'Receive notifications on your device',
+                          icon: Icons.notifications,
+                          value: _pushNotifications,
+                          onChanged:
+                              (value) =>
+                                  setState(() => _pushNotifications = value),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        _buildSettingCard(
+                          title: 'Issue Updates',
+                          subtitle: 'Get notified when your issues are updated',
+                          icon: Icons.update,
+                          value: _issueUpdates,
+                          onChanged:
+                              (value) => setState(() => _issueUpdates = value),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        _buildSettingCard(
+                          title: 'System Updates',
+                          subtitle: 'App updates and maintenance notifications',
+                          icon: Icons.system_update,
+                          value: _systemUpdates,
+                          onChanged:
+                              (value) => setState(() => _systemUpdates = value),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        _buildSettingCard(
+                          title: 'Email Notifications',
+                          subtitle: 'Receive notifications via email',
+                          icon: Icons.email,
+                          value: _emailNotifications,
+                          onChanged:
+                              (value) =>
+                                  setState(() => _emailNotifications = value),
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        GradientButton(
+                          text: 'Save Settings',
+                          onPressed: _saveSettings,
+                          icon: Icons.save,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return ModernCard(
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: ModernTheme.primaryGradient,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: ModernTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: ModernTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: ModernTheme.primaryBlue,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _saveSettings() async {
+    await _notificationService.updateNotificationPreferences(
+      pushNotifications: _pushNotifications,
+      issueUpdates: _issueUpdates,
+      systemUpdates: _systemUpdates,
+      emailNotifications: _emailNotifications,
+    );
+
+    Navigator.pop(context);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 12),
+            Text('Settings saved successfully'),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
       ),
     );
   }

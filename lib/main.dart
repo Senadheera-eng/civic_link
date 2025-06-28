@@ -4,15 +4,11 @@ import 'package:civic_link/screens/department_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:provider/provider.dart';
 import 'firebase_options.dart';
-import 'providers/notification_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_dashboard.dart';
-import 'screens/notification_screen.dart';
-import 'screens/profile_screen.dart';
 import 'services/auth_service.dart';
 import 'theme/simple_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart' show User;
@@ -65,18 +61,7 @@ void main() async {
     // Continue anyway - the app can still work with limited functionality
   }
 
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => NotificationProvider()),
-        StreamProvider<UserModel?>.value(
-          value: AuthService().user,
-          initialData: null,
-        ),
-      ],
-      child: MyApp(),
-    ),
-  );
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {

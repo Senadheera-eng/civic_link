@@ -192,8 +192,10 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
       if (mounted) {
         _showSuccessSnackBar('Issue submitted successfully!');
 
-        // Return true to indicate successful submission
-        Navigator.pop(context, true); // This is the key change!
+        // 🔁 Add slight delay to allow Firestore to sync
+        await Future.delayed(const Duration(milliseconds: 300));
+
+        Navigator.pop(context, true); // ✅ Trigger home screen refresh
       }
     } catch (e) {
       print("❌ Failed to submit issue: $e");
