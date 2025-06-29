@@ -84,6 +84,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _setupRealTimeUpdates() {
     print("🔄 Setting up real-time updates for home screen");
 
+    // Cancel existing subscription to avoid duplicates
+    _issuesSubscription?.cancel();
     _issuesSubscription = _issueService.getUserIssuesStream().listen(
       (issues) {
         print("📊 Home screen received ${issues.length} issues from stream");
@@ -92,17 +94,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             _userIssues = issues;
             _calculateStatistics(issues);
           });
+          // Check for new issues and show notification
+          _checkForNewIssues(issues);
         }
       },
       onError: (error) {
         print("❌ Error in issues stream: $error");
+        // Retry setup after a delay
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted) {
+            _setupRealTimeUpdates();
+          }
+        });
       },
     );
   }
 
   Future<void> _loadData() async {
     try {
-      print("🏠 Loading home screen data...");
+      print(
+        "🏠 Loading home screen data... (${DateTime.now()})",
+      ); // Enhanced logging
 
       // Load user data
       final userData = await _authService.getUserData();
@@ -150,6 +162,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     print(
       "📊 Updated stats: Resolved: $_resolvedCount, Pending: $_pendingCount, This Month: $_thisMonthCount",
     );
+  }
+
+  // NEW: Check for new issues and show notifications
+  void _checkForNewIssues(List<IssueModel> newIssues) {
+    // Only check if we already had issues loaded (not on first load)
+    if (_userIssues.isEmpty) return;
+
+    final now = DateTime.now();
+    final recentIssues =
+        newIssues
+            .where(
+              (issue) =>
+                  now.difference(issue.createdAt).inMinutes <
+                      2 && // Very recent
+                  issue.status.toLowerCase() == 'pending',
+            )
+            .toList();
+
+    // Check if there are more issues than before
+    final previousCount = _userIssues.length;
+    final newCount = newIssues.length;
+
+    if (newCount > previousCount) {
+      final additionalIssues = newCount - previousCount;
+      _showSuccessSnackBar(
+        'Your issue has been submitted successfully! You now have $newCount total issues.',
+      );
+    }
   }
 
   Future<void> _signOut() async {
@@ -248,6 +288,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       // Force refresh the data
       await _loadData();
+      _setupRealTimeUpdates();
     }
   }
 
@@ -383,6 +424,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
         backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // Show success message
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
@@ -806,6 +866,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               subtitle: 'Monitor your reports',
               gradient: ModernTheme.accentGradient,
               onTap: () async {
+                print("📱 Navigating to My Issues screen...");
+                // Handle return from My Issues screen
+
                 // Also handle return from My Issues screen
                 final result = await Navigator.push(
                   context,
@@ -1048,6 +1111,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             TextButton.icon(
               onPressed: () async {
+                print("📋 Navigating to view all issues...");
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(

@@ -17,9 +17,7 @@ import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:civic_link/services/notification_service.dart';
 import 'models/user_model.dart';
 import 'services/settings_service.dart';
-
-// Remove or comment out the problematic localization import for now
-// import 'package:civic_link/l10n/app_localizations.dart';
+import 'screens/report_issue_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -156,6 +154,7 @@ class _MyAppState extends State<MyApp> {
         '/admin': (context) => AdminDashboard(),
         '/department': (context) => DepartmentDashboard(),
         '/settings': (context) => SettingsScreen(),
+        '/report-issue': (context) => ModernReportIssueScreen(),
       },
     );
   }

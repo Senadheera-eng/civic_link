@@ -191,7 +191,8 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
 
       if (mounted) {
         _showSuccessSnackBar('Issue submitted successfully!');
-
+        // Add a delay to ensure the success message is seen
+        await Future.delayed(const Duration(seconds: 1));
         // Return true to indicate successful submission
         Navigator.pop(context, true); // This is the key change!
       }

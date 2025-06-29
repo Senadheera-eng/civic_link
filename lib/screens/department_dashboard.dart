@@ -7,6 +7,7 @@ import '../models/user_model.dart';
 import '../models/issue_model.dart';
 import '../theme/modern_theme.dart';
 import 'issue_detail_screen.dart';
+import 'dart:async';
 
 // Import the separated widgets
 import '../widgets/department/department_header.dart';
@@ -31,6 +32,8 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
   late AnimationController _refreshController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _refreshAnimation;
+
+  StreamSubscription<QuerySnapshot>? _issuesSubscription;
 
   UserModel? _userData;
   List<IssueModel> _departmentIssues = [];
@@ -84,6 +87,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
 
   @override
   void dispose() {
+    _issuesSubscription?.cancel();
     _fadeController.dispose();
     _refreshController.dispose();
     super.dispose();
@@ -125,6 +129,8 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
         _isLoading = false;
         _isRefreshing = false;
       });
+      // Setup real-time listener after userData is available
+      _setupRealTimeListener();
     } catch (e) {
       print('Error loading data: $e');
       setState(() {
@@ -133,6 +139,49 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
       });
       _showErrorSnackBar('Failed to load dashboard data: ${e.toString()}');
     }
+  }
+
+  void _setupRealTimeListener() {
+    // Cancel existing subscription to avoid duplicates
+    _issuesSubscription?.cancel();
+
+    if (_userData?.department == null) {
+      print("⚠️ No department found, skipping real-time listener setup");
+      return;
+    }
+
+    print(
+      "🔔 Setting up real-time listener for department: ${_userData!.department}",
+    );
+
+    // Listen to real-time changes in issues collection
+    _issuesSubscription = FirebaseFirestore.instance
+        .collection('issues')
+        .where('category', isEqualTo: _userData!.department!)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+          if (mounted) {
+            print("🔔 Real-time update: ${snapshot.docs.length} issues found");
+            _processRealTimeUpdate(snapshot);
+          }
+        });
+  }
+
+  void _processRealTimeUpdate(QuerySnapshot snapshot) {
+    final issues =
+        snapshot.docs.map((doc) => IssueModel.fromFirestore(doc)).toList();
+
+    setState(() {
+      _departmentIssues = issues;
+    });
+
+    // Recalculate statistics with updated data
+    _getAssignedIssues(_userData?.uid ?? '').then((assignedIssues) {
+      _calculateStatistics(issues, assignedIssues);
+      _calculatePerformanceMetrics(issues);
+      setState(() {});
+    });
   }
 
   void _calculateStatistics(
@@ -194,6 +243,24 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     } else {
       _averageResolutionTime = 0.0;
       _resolutionRate = 0.0;
+    }
+  }
+
+  void _checkForNewIssues(List<IssueModel> newIssues) {
+    final now = DateTime.now();
+    final recentIssues =
+        newIssues
+            .where(
+              (issue) =>
+                  now.difference(issue.createdAt).inMinutes < 5 &&
+                  issue.status.toLowerCase() == 'pending',
+            )
+            .toList();
+
+    if (recentIssues.isNotEmpty && _departmentIssues.isNotEmpty) {
+      _showSuccessSnackBar(
+        '${recentIssues.length} new issue(s) reported in your department!',
+      );
     }
   }
 
