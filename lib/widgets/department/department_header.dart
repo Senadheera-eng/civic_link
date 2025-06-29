@@ -1,7 +1,8 @@
-// widgets/department/department_header.dart
+// widgets/department/department_header.dart (UPDATED VERSION)
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../theme/modern_theme.dart';
+import '../../screens/official_settings_screen.dart';
 
 class DepartmentHeader extends StatelessWidget {
   final UserModel? userData;
@@ -21,266 +22,243 @@ class DepartmentHeader extends StatelessWidget {
     required this.onShowAnalytics,
   }) : super(key: key);
 
-  IconData _getDepartmentIcon(String department) {
-    final departmentInfo = Departments.getByName(department);
-    switch (departmentInfo?['icon']) {
-      case 'construction':
-        return Icons.construction;
-      case 'water_drop':
-        return Icons.water_drop;
-      case 'electrical_services':
-        return Icons.electrical_services;
-      case 'security':
-        return Icons.security;
-      case 'delete':
-        return Icons.delete;
-      case 'park':
-        return Icons.park;
-      case 'lightbulb':
-        return Icons.lightbulb;
-      case 'business':
-        return Icons.business;
-      case 'traffic':
-        return Icons.traffic;
-      case 'eco':
-        return Icons.eco;
-      default:
-        return Icons.dashboard;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final departmentInfo = Departments.getByName(userData?.department ?? '');
-    final departmentColor =
-        departmentInfo?['color'] != null
-            ? Color(departmentInfo!['color'])
-            : Colors.white;
-
-    return Container(
+    return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
-          // Refresh indicator
-          if (isRefreshing)
-            RotationTransition(
-              turns: refreshAnimation,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.refresh, color: ModernTheme.accent, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Refreshing data...',
-                      style: TextStyle(
-                        color: ModernTheme.accent,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-          // Main header
+          // Top row with welcome and actions
           Row(
             children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 2,
-                  ),
-                ),
-                child: Icon(
-                  _getDepartmentIcon(userData?.department ?? ''),
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      userData?.department ?? 'Department',
+                      'Welcome back,',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white.withOpacity(0.8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      userData?.fullName ?? 'Official',
                       style: const TextStyle(
-                        fontSize: 22,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         letterSpacing: -0.5,
                       ),
                     ),
-                    const Text(
-                      'Official Dashboard',
+                    Text(
+                      '${userData?.department ?? 'Unknown'} Department',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withOpacity(0.9),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
-              PopupMenuButton<String>(
-                icon: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+              // Action buttons
+              Row(
+                children: [
+                  // Settings button - UPDATED to use OfficialSettingsScreen
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.settings, color: Colors.white),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => OfficialSettingsScreen(),
+                          ),
+                        );
+                      },
+                      tooltip: 'Settings',
+                    ),
                   ),
-                  child: const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Icon(Icons.more_vert, color: Colors.white),
+                  const SizedBox(width: 12),
+                  // Analytics button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.analytics, color: Colors.white),
+                      onPressed: onShowAnalytics,
+                      tooltip: 'Analytics',
+                    ),
                   ),
-                ),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'profile':
-                      _showProfile(context);
-                      break;
-                    case 'settings':
-                      Navigator.pushNamed(context, '/settings');
-                      break;
-                    case 'analytics':
-                      onShowAnalytics();
-                      break;
-                    case 'logout':
-                      onSignOut();
-                      break;
-                  }
-                },
-                itemBuilder:
-                    (context) => [
-                      const PopupMenuItem(
-                        value: 'profile',
-                        child: Row(
-                          children: [
-                            Icon(Icons.person),
-                            SizedBox(width: 12),
-                            Text('Profile'),
-                          ],
-                        ),
+                  const SizedBox(width: 12),
+                  // Profile/Menu button
+                  PopupMenuButton<String>(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const PopupMenuItem(
-                        value: 'analytics',
-                        child: Row(
-                          children: [
-                            Icon(Icons.analytics),
-                            SizedBox(width: 12),
-                            Text('Analytics'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'settings',
-                        child: Row(
-                          children: [
-                            Icon(Icons.settings),
-                            SizedBox(width: 12),
-                            Text('Settings'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuDivider(),
-                      const PopupMenuItem(
-                        value: 'logout',
-                        child: Row(
-                          children: [
-                            Icon(Icons.logout, color: Colors.red),
-                            SizedBox(width: 12),
-                            Text('Logout', style: TextStyle(color: Colors.red)),
-                          ],
-                        ),
-                      ),
-                    ],
+                      child: const Icon(Icons.person, color: Colors.white),
+                    ),
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'profile':
+                          _showProfileDialog(context);
+                          break;
+                        case 'help':
+                          _showHelpDialog(context);
+                          break;
+                        case 'logout':
+                          onSignOut();
+                          break;
+                      }
+                    },
+                    itemBuilder:
+                        (context) => [
+                          const PopupMenuItem(
+                            value: 'profile',
+                            child: Row(
+                              children: [
+                                Icon(Icons.person_outline),
+                                SizedBox(width: 12),
+                                Text('View Profile'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'help',
+                            child: Row(
+                              children: [
+                                Icon(Icons.help_outline),
+                                SizedBox(width: 12),
+                                Text('Help & Support'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            value: 'logout',
+                            child: Row(
+                              children: [
+                                Icon(Icons.logout, color: Colors.red),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Sign Out',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                  ),
+                ],
               ),
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          // Welcome message with verification status
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: departmentColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    userData?.isVerified == true
-                        ? Icons.verified
-                        : Icons.pending,
-                    color: departmentColor,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Welcome, ${userData?.shortDisplayName ?? 'Official'}!',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+          // Status indicators
+          Row(
+            children: [
+              // Refresh indicator
+              if (isRefreshing)
+                AnimatedBuilder(
+                  animation: refreshAnimation,
+                  builder: (context, child) {
+                    return Transform.rotate(
+                      angle: refreshAnimation.value * 2 * 3.14159,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.refresh,
                           color: Colors.white,
+                          size: 16,
                         ),
                       ),
+                    );
+                  },
+                ),
+              if (isRefreshing) const SizedBox(width: 12),
+
+              // Urgent issues indicator
+              if (urgentCount > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.warning, color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
                       Text(
-                        'ID: ${userData?.employeeId ?? 'N/A'} • ${userData?.accountStatus ?? 'Active'}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.8),
+                        '$urgentCount Urgent',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
                     ],
                   ),
                 ),
-                if (urgentCount > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: ModernTheme.error,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$urgentCount URGENT',
-                      style: const TextStyle(
+                const SizedBox(width: 12),
+              ],
+
+              // Online status
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.circle, color: Colors.white, size: 8),
+                    SizedBox(width: 6),
+                    Text(
+                      'Online',
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
                         fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
-                  ),
-              ],
-            ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  void _showProfile(BuildContext context) {
+  void _showProfileDialog(BuildContext context) {
     showDialog(
       context: context,
       builder:
@@ -288,44 +266,19 @@ class DepartmentHeader extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: ModernTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text('Official Profile'),
-              ],
-            ),
+            title: const Text('Profile Information'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildProfileItem('Name', userData?.fullName ?? 'N/A'),
-                _buildProfileItem('Email', userData?.email ?? 'N/A'),
-                _buildProfileItem('Department', userData?.department ?? 'N/A'),
-                _buildProfileItem('Employee ID', userData?.employeeId ?? 'N/A'),
-                _buildProfileItem('Status', userData?.accountStatus ?? 'N/A'),
-                _buildProfileItem(
-                  'Member Since',
-                  userData?.createdAt != null
-                      ? _formatDate(userData!.createdAt!)
-                      : 'N/A',
+                _buildProfileRow('Name', userData?.fullName ?? 'N/A'),
+                _buildProfileRow('Email', userData?.email ?? 'N/A'),
+                _buildProfileRow('Department', userData?.department ?? 'N/A'),
+                _buildProfileRow('Role', 'Department Official'),
+                _buildProfileRow(
+                  'Status',
+                  userData?.isVerified == true ? 'Verified' : 'Pending',
                 ),
-                if (userData?.verifiedAt != null)
-                  _buildProfileItem(
-                    'Verified On',
-                    _formatDate(userData!.verifiedAt!),
-                  ),
               ],
             ),
             actions: [
@@ -333,46 +286,66 @@ class DepartmentHeader extends StatelessWidget {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Close'),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pushNamed(context, '/settings');
-                },
-                child: const Text('Edit Profile'),
+            ],
+          ),
+    );
+  }
+
+  void _showHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Help & Support'),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Need help? Here are some resources:'),
+                SizedBox(height: 16),
+                Text(
+                  '• Use the filter tabs to navigate between issue categories',
+                ),
+                Text('• Tap on any issue to view details and take action'),
+                Text('• Use the Manage button for bulk operations'),
+                Text('• Check Analytics for performance insights'),
+                SizedBox(height: 16),
+                Text(
+                  'For technical support, contact your system administrator.',
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Got it'),
               ),
             ],
           ),
     );
   }
 
-  Widget _buildProfileItem(String label, String value) {
+  Widget _buildProfileRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 80,
             child: Text(
               '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: ModernTheme.textSecondary,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: ModernTheme.textPrimary),
-            ),
+            child: Text(value, style: const TextStyle(color: Colors.grey)),
           ),
         ],
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
   }
 }

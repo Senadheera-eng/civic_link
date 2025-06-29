@@ -1,4 +1,4 @@
-// screens/department_dashboard.dart (REFACTORED MAIN FILE)
+// screens/department_dashboard.dart (REORGANIZED VERSION)
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
@@ -11,9 +11,7 @@ import 'dart:async';
 
 // Import the separated widgets
 import '../widgets/department/department_header.dart';
-import '../widgets/department/department_stats.dart';
 import '../widgets/department/performance_metrics.dart';
-import '../widgets/department/filter_tabs.dart';
 import '../widgets/department/management_options_modal.dart';
 import '../widgets/department/analytics_modal.dart';
 import '../widgets/department/official_issue_detail_screen.dart';
@@ -440,6 +438,188 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     );
   }
 
+  // NEW: Professional Filter Tabs Widget
+  Widget _buildProfessionalFilterTabs() {
+    final tabs = [
+      {
+        'key': 'pending',
+        'label': 'Pending',
+        'icon': Icons.pending_actions,
+        'count': _pendingCount,
+      },
+      {
+        'key': 'urgent',
+        'label': 'Urgent',
+        'icon': Icons.priority_high,
+        'count': _urgentCount,
+      },
+      {
+        'key': 'assigned',
+        'label': 'Assigned',
+        'icon': Icons.assignment_ind,
+        'count': _assignedToMeCount,
+      },
+      {
+        'key': 'in_progress',
+        'label': 'In Progress',
+        'icon': Icons.construction,
+        'count': _inProgressCount,
+      },
+      {
+        'key': 'resolved',
+        'label': 'Resolved',
+        'icon': Icons.check_circle,
+        'count': _resolvedCount,
+      },
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Issue Categories',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: ModernTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 1.6,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: tabs.length,
+            itemBuilder: (context, index) {
+              final tab = tabs[index];
+              final isSelected = _selectedTab == tab['key'];
+              final count = tab['count'] as int;
+
+              Color getTabColor(String key) {
+                switch (key) {
+                  case 'pending':
+                    return ModernTheme.warning;
+                  case 'urgent':
+                    return ModernTheme.error;
+                  case 'assigned':
+                    return ModernTheme.accent;
+                  case 'in_progress':
+                    return ModernTheme.primaryBlue;
+                  case 'resolved':
+                    return ModernTheme.success;
+                  default:
+                    return ModernTheme.textSecondary;
+                }
+              }
+
+              final tabColor = getTabColor(tab['key'] as String);
+
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap:
+                      () => setState(() => _selectedTab = tab['key'] as String),
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient:
+                          isSelected
+                              ? LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [tabColor, tabColor.withOpacity(0.8)],
+                              )
+                              : null,
+                      color: isSelected ? null : ModernTheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color:
+                            isSelected
+                                ? Colors.transparent
+                                : tabColor.withOpacity(0.3),
+                        width: 2,
+                      ),
+                      boxShadow:
+                          isSelected
+                              ? [
+                                BoxShadow(
+                                  color: tabColor.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                              : null,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                tab['icon'] as IconData,
+                                color: isSelected ? Colors.white : tabColor,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      isSelected
+                                          ? Colors.white.withOpacity(0.2)
+                                          : tabColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  count.toString(),
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : tabColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            tab['label'] as String,
+                            style: TextStyle(
+                              color:
+                                  isSelected
+                                      ? Colors.white
+                                      : ModernTheme.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -512,29 +692,14 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          DepartmentStats(
-                            totalIssues: _totalIssues,
-                            thisWeekCount: _thisWeekCount,
-                            pendingCount: _pendingCount,
-                            inProgressCount: _inProgressCount,
-                            resolvedCount: _resolvedCount,
-                            urgentCount: _urgentCount,
-                          ),
+                          // REORGANIZED: Professional Filter Tabs (replaced stats)
+                          _buildProfessionalFilterTabs(),
+
+                          // Performance Metrics
                           PerformanceMetrics(
                             resolutionRate: _resolutionRate,
                             averageResolutionTime: _averageResolutionTime,
                             assignedToMeCount: _assignedToMeCount,
-                          ),
-                          FilterTabs(
-                            selectedTab: _selectedTab,
-                            pendingCount: _pendingCount,
-                            urgentCount: _urgentCount,
-                            assignedToMeCount: _assignedToMeCount,
-                            inProgressCount: _inProgressCount,
-                            resolvedCount: _resolvedCount,
-                            onTabSelected: (tab) {
-                              setState(() => _selectedTab = tab);
-                            },
                           ),
                         ],
                       ),

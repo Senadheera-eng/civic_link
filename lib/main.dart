@@ -18,6 +18,7 @@ import 'package:civic_link/services/notification_service.dart';
 import 'models/user_model.dart';
 import 'services/settings_service.dart';
 import 'screens/report_issue_screen.dart';
+import 'package:civic_link/screens/official_settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -154,6 +155,7 @@ class _MyAppState extends State<MyApp> {
         '/admin': (context) => AdminDashboard(),
         '/department': (context) => DepartmentDashboard(),
         '/settings': (context) => SettingsScreen(),
+        '/official-settings': (context) => OfficialSettingsScreen(),
         '/report-issue': (context) => ModernReportIssueScreen(),
       },
     );
