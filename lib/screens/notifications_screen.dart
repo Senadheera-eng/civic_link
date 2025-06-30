@@ -1,4 +1,5 @@
 // screens/notifications_screen.dart
+// screens/notifications_screen.dart (Enhanced with Reminder Features)
 import 'package:flutter/material.dart';
 import '../services/notification_service.dart';
 import '../models/notification_model.dart';
@@ -19,11 +20,13 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   late Animation<double> _fadeAnimation;
 
   bool _showUnreadOnly = false;
+  bool _isTestingConnection = false;
 
   @override
   void initState() {
     super.initState();
     _initAnimations();
+    _initializeNotifications();
   }
 
   void _initAnimations() {
@@ -36,6 +39,39 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
     _fadeController.forward();
+  }
+
+  Future<void> _initializeNotifications() async {
+    try {
+      print("🔔 Initializing notifications in NotificationsScreen...");
+      await _notificationService.initialize();
+
+      // Test connection and create test notification if needed
+      await _testNotificationSystem();
+    } catch (e) {
+      print("❌ Error initializing notifications: $e");
+    }
+  }
+
+  Future<void> _testNotificationSystem() async {
+    setState(() => _isTestingConnection = true);
+
+    try {
+      // Test Firestore connection
+      await _notificationService.testFirestoreConnection();
+
+      // Create a test notification to ensure the system works
+      await _notificationService.createTestNotification();
+
+      print("✅ Notification system test completed");
+    } catch (e) {
+      print("❌ Notification system test failed: $e");
+      _showErrorSnackBar('Failed to initialize notifications: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isTestingConnection = false);
+      }
+    }
   }
 
   @override
@@ -68,6 +104,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     child: Column(
                       children: [
                         _buildFilterControls(),
+                        if (_isTestingConnection) _buildTestingIndicator(),
                         Expanded(child: _buildNotificationsList()),
                       ],
                     ),
@@ -133,6 +170,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   case 'mark_all_read':
                     _markAllAsRead();
                     break;
+                  case 'test_notification':
+                    _createTestNotification();
+                    break;
+                  case 'schedule_reminders':
+                    _scheduleWeeklyReminders();
+                    break;
                   case 'settings':
                     _openNotificationSettings();
                     break;
@@ -151,6 +194,26 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                       ),
                     ),
                     const PopupMenuItem(
+                      value: 'test_notification',
+                      child: Row(
+                        children: [
+                          Icon(Icons.bug_report),
+                          SizedBox(width: 12),
+                          Text('Test Notification'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'schedule_reminders',
+                      child: Row(
+                        children: [
+                          Icon(Icons.schedule),
+                          SizedBox(width: 12),
+                          Text('Check Reminders'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
                       value: 'settings',
                       child: Row(
                         children: [
@@ -162,6 +225,34 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     ),
                   ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTestingIndicator() {
+    return Container(
+      margin: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: ModernTheme.accentGradient,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Row(
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 2,
+            ),
+          ),
+          SizedBox(width: 12),
+          Text(
+            'Testing notification system...',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -258,12 +349,17 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     return StreamBuilder<List<NotificationModel>>(
       stream: _notificationService.getUserNotificationsStream(),
       builder: (context, snapshot) {
+        print("🔔 Notification stream state: ${snapshot.connectionState}");
+        print("🔔 Has data: ${snapshot.hasData}");
+        print("🔔 Data length: ${snapshot.data?.length ?? 0}");
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingState();
         }
 
         if (snapshot.hasError) {
-          return _buildErrorState();
+          print("❌ Stream error: ${snapshot.error}");
+          return _buildErrorState(snapshot.error.toString());
         }
 
         List<NotificationModel> notifications = snapshot.data ?? [];
@@ -392,6 +488,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                           _buildNotificationTypeChip(notification.type),
                         ],
                       ),
+
+                      // Show follow-up button for reminders
+                      if (_canShowFollowUpButton(notification)) ...[
+                        const SizedBox(height: 12),
+                        _buildFollowUpButton(notification),
+                      ],
                     ],
                   ),
                 ),
@@ -413,6 +515,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                       case 'delete':
                         _deleteNotification(notification);
                         break;
+                      case 'reply':
+                        _showReplyDialog(notification);
+                        break;
                     }
                   },
                   itemBuilder:
@@ -425,6 +530,17 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                                 Icon(Icons.done, size: 18),
                                 SizedBox(width: 8),
                                 Text('Mark as read'),
+                              ],
+                            ),
+                          ),
+                        if (_canReplyToNotification(notification))
+                          const PopupMenuItem(
+                            value: 'reply',
+                            child: Row(
+                              children: [
+                                Icon(Icons.reply, size: 18),
+                                SizedBox(width: 8),
+                                Text('Reply'),
                               ],
                             ),
                           ),
@@ -449,6 +565,34 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildFollowUpButton(NotificationModel notification) {
+    return Container(
+      width: double.infinity,
+      height: 36,
+      child: ElevatedButton.icon(
+        onPressed: () => _showFollowUpDialog(notification),
+        icon: const Icon(Icons.message, size: 16),
+        label: const Text('Send Follow-up', style: TextStyle(fontSize: 14)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: ModernTheme.accent,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+
+  bool _canShowFollowUpButton(NotificationModel notification) {
+    return notification.type == 'citizen_reminder' &&
+        notification.data['canSendFollowUp'] == true;
+  }
+
+  bool _canReplyToNotification(NotificationModel notification) {
+    return notification.type == 'department_reminder' ||
+        notification.type == 'citizen_followup';
   }
 
   Widget _buildNotificationTypeChip(String type) {
@@ -486,7 +630,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     );
   }
 
-  Widget _buildErrorState() {
+  Widget _buildErrorState(String error) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -512,12 +656,34 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               color: ModernTheme.textPrimary,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            error,
+            style: const TextStyle(
+              fontSize: 14,
+              color: ModernTheme.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 12),
-          GradientButton(
-            text: 'Retry',
-            onPressed: () => setState(() {}),
-            width: 120,
-            height: 44,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GradientButton(
+                text: 'Retry',
+                onPressed: () => setState(() {}),
+                width: 120,
+                height: 44,
+              ),
+              const SizedBox(width: 12),
+              GradientButton(
+                text: 'Test Connection',
+                onPressed: _testNotificationSystem,
+                width: 140,
+                height: 44,
+                gradient: ModernTheme.accentGradient,
+              ),
+            ],
           ),
         ],
       ),
@@ -563,6 +729,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             ),
             textAlign: TextAlign.center,
           ),
+          const SizedBox(height: 20),
+          GradientButton(
+            text: 'Create Test Notification',
+            onPressed: _createTestNotification,
+            width: 200,
+            height: 44,
+            icon: Icons.bug_report,
+          ),
         ],
       ),
     );
@@ -578,7 +752,15 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       case 'system_update':
         return ModernTheme.warning;
       case 'reminder':
+      case 'citizen_reminder':
+      case 'department_reminder':
         return ModernTheme.accent;
+      case 'citizen_followup':
+        return ModernTheme.info;
+      case 'department_reply':
+        return ModernTheme.primaryBlue;
+      case 'test':
+        return ModernTheme.error;
       default:
         return ModernTheme.textSecondary;
     }
@@ -593,7 +775,11 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       case 'system_update':
         return ModernTheme.warningGradient;
       case 'reminder':
+      case 'citizen_reminder':
+      case 'department_reminder':
         return ModernTheme.accentGradient;
+      case 'test':
+        return ModernTheme.errorGradient;
       default:
         return ModernTheme.primaryGradient;
     }
@@ -608,7 +794,16 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       case 'system_update':
         return 'System';
       case 'reminder':
+      case 'citizen_reminder':
         return 'Reminder';
+      case 'department_reminder':
+        return 'Dept. Reminder';
+      case 'citizen_followup':
+        return 'Follow-up';
+      case 'department_reply':
+        return 'Reply';
+      case 'test':
+        return 'Test';
       default:
         return 'General';
     }
@@ -629,18 +824,21 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         }
         break;
       case 'welcome':
-        // Navigate to home or show welcome flow
         Navigator.pop(context);
         break;
+      case 'citizen_reminder':
+      case 'department_reminder':
+        final issueId = notification.data['issueId'];
+        if (issueId != null) {
+          _navigateToIssueDetail(issueId);
+        }
+        break;
       default:
-        // Handle other notification types
         break;
     }
   }
 
   void _navigateToIssueDetail(String issueId) {
-    // This would require loading the issue first
-    // For now, just show a message
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Navigate to issue: $issueId'),
@@ -649,36 +847,146 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     );
   }
 
+  void _showFollowUpDialog(NotificationModel notification) {
+    final messageController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Send Follow-up Message'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Send a follow-up message about: ${notification.data['issueTitle'] ?? 'your issue'}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: ModernTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: messageController,
+                  decoration: const InputDecoration(
+                    hintText: 'Type your message...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (messageController.text.trim().isNotEmpty) {
+                    await _notificationService.sendCitizenFollowUp(
+                      issueId: notification.data['issueId'] ?? '',
+                      message: messageController.text.trim(),
+                      category: notification.data['category'] ?? '',
+                    );
+                    Navigator.pop(context);
+                    _showSuccessSnackBar('Follow-up message sent!');
+                  }
+                },
+                child: const Text('Send'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _showReplyDialog(NotificationModel notification) {
+    final messageController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Send Reply'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Reply to: ${notification.data['senderName'] ?? 'Citizen'}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: ModernTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: messageController,
+                  decoration: const InputDecoration(
+                    hintText: 'Type your reply...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (messageController.text.trim().isNotEmpty) {
+                    await _notificationService.sendDepartmentReply(
+                      issueId: notification.data['issueId'] ?? '',
+                      citizenId: notification.data['senderId'] ?? '',
+                      message: messageController.text.trim(),
+                      officialName: 'Department Official', // Get from user data
+                      department: notification.data['category'] ?? '',
+                    );
+                    Navigator.pop(context);
+                    _showSuccessSnackBar('Reply sent!');
+                  }
+                },
+                child: const Text('Send Reply'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _createTestNotification() async {
+    try {
+      await _notificationService.createTestNotification();
+      _showSuccessSnackBar('Test notification created!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to create test notification: $e');
+    }
+  }
+
+  void _scheduleWeeklyReminders() async {
+    try {
+      await _notificationService.scheduleWeeklyReminders();
+      _showSuccessSnackBar('Weekly reminders checked and sent if needed!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to schedule reminders: $e');
+    }
+  }
+
   void _markAllAsRead() async {
     await _notificationService.markAllAsRead();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.done_all, color: Colors.white),
-            SizedBox(width: 12),
-            Text('All notifications marked as read'),
-          ],
-        ),
-        backgroundColor: ModernTheme.success,
-      ),
-    );
+    _showSuccessSnackBar('All notifications marked as read');
   }
 
   void _deleteNotification(NotificationModel notification) async {
     await _notificationService.deleteNotification(notification.id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.delete, color: Colors.white),
-            SizedBox(width: 12),
-            Text('Notification deleted'),
-          ],
-        ),
-        backgroundColor: ModernTheme.error,
-      ),
-    );
+    _showSuccessSnackBar('Notification deleted');
   }
 
   void _openNotificationSettings() {
@@ -686,6 +994,42 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       context,
       MaterialPageRoute(
         builder: (context) => const NotificationSettingsScreen(),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }

@@ -1,4 +1,4 @@
-// services/notification_service.dart
+// services/notification_service.dart (Enhanced with Weekly Reminders)
 import 'dart:ui';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import '../models/notification_model.dart';
+import '../models/issue_model.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -130,6 +131,221 @@ class NotificationService {
       print("❌ Error saving FCM token: $e");
     }
   }
+
+  // 🔔 WEEKLY REMINDER SYSTEM - NEW FEATURE
+
+  /// Schedule weekly reminders for pending issues
+  Future<void> scheduleWeeklyReminders() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      print("🔄 Checking for issues needing weekly reminders...");
+
+      // Get all pending issues older than 7 days
+      final oneWeekAgo = DateTime.now().subtract(const Duration(days: 7));
+
+      final pendingIssues =
+          await _firestore
+              .collection('issues')
+              .where('userId', isEqualTo: user.uid)
+              .where('status', isEqualTo: 'pending')
+              .where('createdAt', isLessThan: Timestamp.fromDate(oneWeekAgo))
+              .get();
+
+      print("📋 Found ${pendingIssues.docs.length} issues needing reminders");
+
+      for (var doc in pendingIssues.docs) {
+        final issue = IssueModel.fromFirestore(doc);
+
+        // Check if reminder was already sent this week
+        final lastReminderSent = await _getLastReminderDate(issue.id);
+        if (lastReminderSent != null &&
+            DateTime.now().difference(lastReminderSent).inDays < 7) {
+          continue; // Skip if reminder sent within last 7 days
+        }
+
+        await _sendWeeklyReminderToCitizen(issue);
+        await _sendReminderToDepartment(issue);
+        await _recordReminderSent(issue.id);
+      }
+
+      print("✅ Weekly reminders processing completed");
+    } catch (e) {
+      print("❌ Error scheduling weekly reminders: $e");
+    }
+  }
+
+  /// Send reminder to citizen about their pending issue
+  Future<void> _sendWeeklyReminderToCitizen(IssueModel issue) async {
+    final daysOld = DateTime.now().difference(issue.createdAt).inDays;
+
+    await sendNotificationToUser(
+      userId: issue.userId,
+      title: '⏰ Weekly Update: ${issue.title}',
+      body:
+          'Your issue has been pending for $daysOld days. The ${issue.category} department has been notified.',
+      data: {
+        'type': 'citizen_reminder',
+        'issueId': issue.id,
+        'issueTitle': issue.title,
+        'daysPending': daysOld,
+        'category': issue.category,
+        'canSendFollowUp': true,
+      },
+    );
+  }
+
+  /// Send reminder notification to department officials
+  Future<void> _sendReminderToDepartment(IssueModel issue) async {
+    try {
+      // Find officials in the relevant department
+      final officials =
+          await _firestore
+              .collection('users')
+              .where('userType', isEqualTo: 'official')
+              .where('department', isEqualTo: issue.category)
+              .where('isVerified', isEqualTo: true)
+              .get();
+
+      final daysOld = DateTime.now().difference(issue.createdAt).inDays;
+
+      for (var officialDoc in officials.docs) {
+        await sendNotificationToUser(
+          userId: officialDoc.id,
+          title: '📋 Reminder: Pending Issue Needs Attention',
+          body:
+              'Issue "${issue.title}" by ${issue.userName} has been pending for $daysOld days',
+          data: {
+            'type': 'department_reminder',
+            'issueId': issue.id,
+            'issueTitle': issue.title,
+            'reportedBy': issue.userName,
+            'daysPending': daysOld,
+            'category': issue.category,
+            'priority': issue.priority,
+          },
+        );
+      }
+
+      print("✅ Department reminder sent to ${officials.docs.length} officials");
+    } catch (e) {
+      print("❌ Error sending department reminder: $e");
+    }
+  }
+
+  /// Send follow-up message from citizen to department
+  Future<void> sendCitizenFollowUp({
+    required String issueId,
+    required String message,
+    required String category,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      // Get user data for sender info
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      final userName = userDoc.data()?['fullName'] ?? 'Citizen';
+
+      // Find department officials
+      final officials =
+          await _firestore
+              .collection('users')
+              .where('userType', isEqualTo: 'official')
+              .where('department', isEqualTo: category)
+              .where('isVerified', isEqualTo: true)
+              .get();
+
+      // Send follow-up to each official
+      for (var officialDoc in officials.docs) {
+        await sendNotificationToUser(
+          userId: officialDoc.id,
+          title: '💬 Follow-up Message from Citizen',
+          body: '$userName: "$message"',
+          data: {
+            'type': 'citizen_followup',
+            'issueId': issueId,
+            'senderName': userName,
+            'senderId': user.uid,
+            'message': message,
+            'category': category,
+          },
+        );
+      }
+
+      // Confirm to citizen
+      await sendNotificationToUser(
+        userId: user.uid,
+        title: '✅ Follow-up Sent',
+        body: 'Your message has been sent to the ${category} department.',
+        data: {'type': 'followup_confirmation', 'issueId': issueId},
+      );
+
+      print("✅ Follow-up message sent to ${officials.docs.length} officials");
+    } catch (e) {
+      print("❌ Error sending follow-up: $e");
+    }
+  }
+
+  /// Send reply from department to citizen
+  Future<void> sendDepartmentReply({
+    required String issueId,
+    required String citizenId,
+    required String message,
+    required String officialName,
+    required String department,
+  }) async {
+    try {
+      await sendNotificationToUser(
+        userId: citizenId,
+        title: '💼 Reply from ${department} Department',
+        body: '${officialName}: "$message"',
+        data: {
+          'type': 'department_reply',
+          'issueId': issueId,
+          'officialName': officialName,
+          'department': department,
+          'message': message,
+        },
+      );
+
+      print("✅ Department reply sent to citizen");
+    } catch (e) {
+      print("❌ Error sending department reply: $e");
+    }
+  }
+
+  /// Check when last reminder was sent for an issue
+  Future<DateTime?> _getLastReminderDate(String issueId) async {
+    try {
+      final reminderDoc =
+          await _firestore.collection('reminder_log').doc(issueId).get();
+
+      if (reminderDoc.exists) {
+        final timestamp = reminderDoc.data()?['lastReminderSent'] as Timestamp?;
+        return timestamp?.toDate();
+      }
+      return null;
+    } catch (e) {
+      print("❌ Error getting last reminder date: $e");
+      return null;
+    }
+  }
+
+  /// Record that a reminder was sent
+  Future<void> _recordReminderSent(String issueId) async {
+    try {
+      await _firestore.collection('reminder_log').doc(issueId).set({
+        'lastReminderSent': FieldValue.serverTimestamp(),
+        'reminderCount': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print("❌ Error recording reminder sent: $e");
+    }
+  }
+
+  // 🔔 EXISTING METHODS (Keep as they are)
 
   // Send notification to specific user
   Future<void> sendNotificationToUser({
@@ -283,7 +499,7 @@ class NotificationService {
     print("🧭 Navigate to: ${data['type']}");
   }
 
-  // Get user notifications stream
+  // Get user notifications stream with better error handling
   Stream<List<NotificationModel>> getUserNotificationsStream() {
     final user = _auth.currentUser;
     if (user == null) {
@@ -325,6 +541,27 @@ class NotificationService {
               .cast<NotificationModel>()
               .toList();
         });
+  }
+
+  // Test notification creation (for debugging)
+  Future<void> createTestNotification() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      print("🧪 Creating test notification...");
+
+      await sendNotificationToUser(
+        userId: user.uid,
+        title: '🧪 Test Notification',
+        body: 'This is a test notification to verify the system is working.',
+        data: {'type': 'test', 'timestamp': DateTime.now().toIso8601String()},
+      );
+
+      print("✅ Test notification created successfully");
+    } catch (e) {
+      print("❌ Error creating test notification: $e");
+    }
   }
 
   Future<void> testFirestoreConnection() async {
@@ -466,6 +703,7 @@ class NotificationService {
           'issueUpdates': issueUpdates,
           'systemUpdates': systemUpdates,
           'emailNotifications': emailNotifications,
+          'weeklyReminders': true, // Default to true for new feature
           'updatedAt': FieldValue.serverTimestamp(),
         },
       });
