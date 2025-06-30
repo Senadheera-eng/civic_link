@@ -1,6 +1,7 @@
-// screens/settings_screen.dart (COMPLETE FINAL VERSION)
+// screens/settings_screen.dart (FINAL FIXED VERSION)
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import '../services/settings_service.dart';
 import '../models/user_model.dart';
@@ -30,7 +31,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _locationEnabled = false;
   bool _biometricEnabled = false;
   String _selectedLanguage = 'English';
-  String _selectedTheme = 'Light';
+  bool _isDarkMode = false;
+  bool _soundEnabled = true;
 
   @override
   void initState() {
@@ -65,15 +67,22 @@ class _SettingsScreenState extends State<SettingsScreen>
       // Load settings from SettingsService
       await _settingsService.initializeSettings();
 
+      // Load additional settings from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+
       setState(() {
         _userData = userData;
         _notificationsEnabled = _settingsService.notificationsEnabled;
-        _emailNotifications = _settingsService.emailNotifications;
-        _pushNotifications = _settingsService.pushNotifications;
-        _locationEnabled = _settingsService.locationEnabled;
-        _biometricEnabled = _settingsService.biometricEnabled;
         _selectedLanguage = _settingsService.selectedLanguage;
-        _selectedTheme = _settingsService.selectedTheme;
+        _isDarkMode = _settingsService.isDarkMode;
+        _soundEnabled = _settingsService.soundEnabled;
+
+        // Load from SharedPreferences for settings not in SettingsService
+        _emailNotifications = prefs.getBool('email_notifications') ?? true;
+        _pushNotifications = prefs.getBool('push_notifications') ?? true;
+        _locationEnabled = prefs.getBool('location_enabled') ?? false;
+        _biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
+
         _isLoading = false;
       });
     } catch (e) {
@@ -82,15 +91,48 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _updateUserProfile(String newName) async {
+    setState(() => _isUpdating = true);
+
+    try {
+      // Update in Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_userData!.uid)
+          .update({'fullName': newName});
+
+      // Update local userData
+      setState(() {
+        _userData = UserModel(
+          uid: _userData!.uid,
+          email: _userData!.email,
+          fullName: newName,
+          userType: _userData!.userType,
+          profilePicture: _userData!.profilePicture,
+          createdAt: _userData!.createdAt,
+        );
+      });
+
+      _showSuccessSnackBar('Profile updated successfully!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to update profile: $e');
+    } finally {
+      setState(() => _isUpdating = false);
+    }
+  }
+
   Future<void> _updateNotificationSettings() async {
     setState(() => _isUpdating = true);
 
     try {
-      await _settingsService.updateNotificationSettings(
-        notificationsEnabled: _notificationsEnabled,
-        emailNotifications: _emailNotifications,
-        pushNotifications: _pushNotifications,
-      );
+      // Update using SettingsService
+      await _settingsService.setNotifications(_notificationsEnabled);
+
+      // Save additional notification settings to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('email_notifications', _emailNotifications);
+      await prefs.setBool('push_notifications', _pushNotifications);
+
       _showSuccessSnackBar('Notification settings updated!');
     } catch (e) {
       _showErrorSnackBar('Failed to update settings: $e');
@@ -103,11 +145,20 @@ class _SettingsScreenState extends State<SettingsScreen>
     setState(() => _isUpdating = true);
 
     try {
-      await _settingsService.updateAppPreferences(
-        language: _selectedLanguage,
-        theme: _selectedTheme,
-      );
+      // Update using SettingsService methods
+      await _settingsService.setLanguage(_selectedLanguage);
+      await _settingsService.setDarkMode(_isDarkMode);
+
       _showSuccessSnackBar('App preferences updated!');
+
+      // Force app restart for immediate theme/language change
+      if (mounted) {
+        // Small delay to show the success message before restart
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/home', (route) => false);
+      }
     } catch (e) {
       _showErrorSnackBar('Failed to update preferences: $e');
     } finally {
@@ -119,10 +170,11 @@ class _SettingsScreenState extends State<SettingsScreen>
     setState(() => _isUpdating = true);
 
     try {
-      await _settingsService.updatePrivacySettings(
-        locationEnabled: _locationEnabled,
-        biometricEnabled: _biometricEnabled,
-      );
+      // Save privacy settings to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('location_enabled', _locationEnabled);
+      await prefs.setBool('biometric_enabled', _biometricEnabled);
+
       _showSuccessSnackBar('Privacy settings updated!');
     } catch (e) {
       _showErrorSnackBar('Failed to update privacy settings: $e');
@@ -172,9 +224,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                 Expanded(
                   child: Container(
                     margin: const EdgeInsets.only(top: 16),
-                    decoration: const BoxDecoration(
-                      color: ModernTheme.background,
-                      borderRadius: BorderRadius.only(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(32),
                         topRight: Radius.circular(32),
                       ),
@@ -198,7 +250,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           const SizedBox(height: 24),
                           _buildAboutSection(),
                           const SizedBox(height: 24),
-                          _buildDangerZone(),
+                          _buildAccountManagement(),
                           const SizedBox(height: 40),
                         ],
                       ),
@@ -324,23 +376,25 @@ class _SettingsScreenState extends State<SettingsScreen>
                   children: [
                     Text(
                       _userData?.fullName ?? 'User',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: ModernTheme.textPrimary,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       _userData?.email ?? 'user@example.com',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: ModernTheme.textSecondary,
+                        color: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.color?.withOpacity(0.7),
                       ),
                     ),
                     const SizedBox(height: 8),
                     ModernStatusChip(
-                      text: _userData?.userType.toUpperCase() ?? 'CITIZEN',
+                      text: _userData?.isAdmin == true ? 'ADMIN' : 'CITIZEN',
                       color:
                           _userData?.isAdmin == true
                               ? ModernTheme.error
@@ -435,21 +489,30 @@ class _SettingsScreenState extends State<SettingsScreen>
         title: 'Language',
         subtitle: 'Choose your preferred language',
         value: _selectedLanguage,
-        items: ['English', 'Spanish', 'French', 'German', 'Chinese'],
+        items: const ['English', 'Sinhala'],
         onChanged: (value) async {
           setState(() => _selectedLanguage = value!);
           await _updateAppPreferences();
         },
       ),
-      _buildDropdownTile(
-        icon: Icons.palette_outlined,
-        title: 'Theme',
-        subtitle: 'Choose app appearance',
-        value: _selectedTheme,
-        items: ['Light', 'Dark', 'System'],
+      _buildSwitchTile(
+        icon: Icons.dark_mode_outlined,
+        title: 'Dark Mode',
+        subtitle: 'Switch between light and dark theme',
+        value: _isDarkMode,
         onChanged: (value) async {
-          setState(() => _selectedTheme = value!);
+          setState(() => _isDarkMode = value);
           await _updateAppPreferences();
+        },
+      ),
+      _buildSwitchTile(
+        icon: Icons.volume_up,
+        title: 'Sound Effects',
+        subtitle: 'Play sounds for notifications',
+        value: _soundEnabled,
+        onChanged: (value) async {
+          setState(() => _soundEnabled = value);
+          await _settingsService.setSoundEnabled(value);
         },
       ),
     ]);
@@ -521,51 +584,23 @@ class _SettingsScreenState extends State<SettingsScreen>
     ]);
   }
 
-  Widget _buildDangerZone() {
-    return ModernCard(
-      color: ModernTheme.error.withOpacity(0.05),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: ModernTheme.errorGradient,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.warning, color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'Danger Zone',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: ModernTheme.error,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            icon: Icons.logout,
-            title: 'Sign Out',
-            subtitle: 'Sign out of your account',
-            onTap: _signOut,
-            textColor: ModernTheme.error,
-          ),
-          _buildSettingsTile(
-            icon: Icons.delete_forever,
-            title: 'Delete Account',
-            subtitle: 'Permanently delete your account',
-            onTap: _deleteAccount,
-            textColor: ModernTheme.error,
-          ),
-        ],
+  Widget _buildAccountManagement() {
+    return _buildSection('Account Management', [
+      _buildSettingsTile(
+        icon: Icons.logout,
+        title: 'Sign Out',
+        subtitle: 'Sign out from your account',
+        onTap: _signOut,
+        textColor: ModernTheme.primaryBlue,
       ),
-    );
+      _buildSettingsTile(
+        icon: Icons.delete_outline,
+        title: 'Delete Account',
+        subtitle: 'Permanently remove your account',
+        onTap: _deleteAccount,
+        textColor: ModernTheme.error,
+      ),
+    ]);
   }
 
   Widget _buildSection(String title, List<Widget> children) {
@@ -590,10 +625,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               const SizedBox(width: 12),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: ModernTheme.textPrimary,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
                 ),
               ),
             ],
@@ -629,14 +664,23 @@ class _SettingsScreenState extends State<SettingsScreen>
         title,
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: textColor ?? ModernTheme.textPrimary,
+          color: textColor ?? Theme.of(context).textTheme.bodyLarge?.color,
         ),
       ),
-      subtitle: Text(subtitle),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.color?.withOpacity(0.7),
+        ),
+      ),
       trailing: Icon(
         Icons.arrow_forward_ios,
         size: 16,
-        color: textColor ?? ModernTheme.textSecondary,
+        color:
+            textColor ??
+            Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
       ),
       onTap: onTap,
       contentPadding: EdgeInsets.zero,
@@ -659,8 +703,21 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         child: Icon(icon, color: ModernTheme.primaryBlue, size: 20),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.color?.withOpacity(0.7),
+        ),
+      ),
       trailing: Switch(
         value: value,
         onChanged: onChanged,
@@ -687,8 +744,21 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         child: Icon(icon, color: ModernTheme.primaryBlue, size: 20),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.color?.withOpacity(0.7),
+        ),
+      ),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
@@ -699,7 +769,11 @@ class _SettingsScreenState extends State<SettingsScreen>
           value: value,
           onChanged: onChanged,
           underline: const SizedBox(),
-          style: const TextStyle(color: ModernTheme.textPrimary, fontSize: 14),
+          style: TextStyle(
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+            fontSize: 14,
+          ),
+          dropdownColor: Theme.of(context).cardColor,
           items:
               items.map((String item) {
                 return DropdownMenuItem<String>(value: item, child: Text(item));
@@ -913,9 +987,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showSuccessSnackBar('Profile updated successfully!');
+                onPressed: () async {
+                  final newName = nameController.text.trim();
+                  if (newName.isNotEmpty && newName != _userData?.fullName) {
+                    Navigator.pop(context);
+                    await _updateUserProfile(newName);
+                  } else {
+                    Navigator.pop(context);
+                  }
                 },
                 child: const Text('Save'),
               ),
@@ -1065,8 +1144,19 @@ class _SettingsScreenState extends State<SettingsScreen>
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: Text(title),
-            content: Text(content),
+            backgroundColor: Theme.of(context).cardColor,
+            title: Text(
+              title,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
+            content: Text(
+              content,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+            ),
             actions: [
               if (showActions) ...[
                 TextButton(
@@ -1130,6 +1220,72 @@ class _SettingsScreenState extends State<SettingsScreen>
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+
+// Supporting classes (use your existing ones, but here are fallbacks if needed)
+class ModernCard extends StatelessWidget {
+  final Widget child;
+
+  const ModernCard({Key? key, required this.child}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class ModernStatusChip extends StatelessWidget {
+  final String text;
+  final Color color;
+  final IconData icon;
+
+  const ModernStatusChip({
+    Key? key,
+    required this.text,
+    required this.color,
+    required this.icon,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }

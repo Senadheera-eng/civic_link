@@ -85,6 +85,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _setupRealTimeUpdates() {
     print("🔄 Setting up real-time updates for home screen");
 
+    // Cancel existing subscription to avoid duplicates
+    _issuesSubscription?.cancel();
     _issuesSubscription = _issueService.getUserIssuesStream().listen(
       (issues) {
         print("📊 Home screen received ${issues.length} issues from stream");
@@ -93,17 +95,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             _userIssues = issues;
             _calculateStatistics(issues);
           });
+          // Check for new issues and show notification
+          _checkForNewIssues(issues);
         }
       },
       onError: (error) {
         print("❌ Error in issues stream: $error");
+        // Retry setup after a delay
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted) {
+            _setupRealTimeUpdates();
+          }
+        });
       },
     );
   }
 
   Future<void> _loadData() async {
     try {
-      print("🏠 Loading home screen data...");
+      print(
+        "🏠 Loading home screen data... (${DateTime.now()})",
+      ); // Enhanced logging
 
       // Load user data
       final userData = await _authService.getUserData();
@@ -153,15 +165,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  // NEW: Check for new issues and show notifications
+  void _checkForNewIssues(List<IssueModel> newIssues) {
+    // Only check if we already had issues loaded (not on first load)
+    if (_userIssues.isEmpty) return;
+
+    final now = DateTime.now();
+    final recentIssues =
+        newIssues
+            .where(
+              (issue) =>
+                  now.difference(issue.createdAt).inMinutes <
+                      2 && // Very recent
+                  issue.status.toLowerCase() == 'pending',
+            )
+            .toList();
+
+    // Check if there are more issues than before
+    final previousCount = _userIssues.length;
+    final newCount = newIssues.length;
+
+    if (newCount > previousCount) {
+      final additionalIssues = newCount - previousCount;
+      _showSuccessSnackBar(
+        'Your issue has been submitted successfully! You now have $newCount total issues.',
+      );
+    }
+  }
+
   Future<void> _signOut() async {
     try {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder:
-            (context) => const Center(
-              child: ModernCard(
-                child: Padding(
+            (context) => Center(
+              child: const ModernCard(
+                child: const Padding(
                   padding: EdgeInsets.all(24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -238,6 +278,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       // Force refresh the data
       await _loadData();
+      _setupRealTimeUpdates();
     }
   }
 
@@ -373,6 +414,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
         backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // Show success message
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
@@ -796,6 +856,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               subtitle: 'Monitor your reports',
               gradient: ModernTheme.accentGradient,
               onTap: () async {
+                print("📱 Navigating to My Issues screen...");
+                // Handle return from My Issues screen
+
                 // Also handle return from My Issues screen
                 final result = await Navigator.push(
                   context,
@@ -1038,6 +1101,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             TextButton.icon(
               onPressed: () async {
+                print("📋 Navigating to view all issues...");
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -1287,6 +1351,194 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+// Add these widget definitions at the bottom of your home_screen.dart file
+
+// ModernCard Widget
+class ModernCard extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const ModernCard({Key? key, required this.child, this.onTap})
+    : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child:
+          onTap != null
+              ? Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: child,
+                  ),
+                ),
+              )
+              : Padding(padding: const EdgeInsets.all(20), child: child),
+    );
+  }
+}
+
+// ModernStatusChip Widget
+class ModernStatusChip extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const ModernStatusChip({Key? key, required this.text, required this.color})
+    : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+// AnimatedCounter Widget
+class AnimatedCounter extends StatelessWidget {
+  final int count;
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  const AnimatedCounter({
+    Key? key,
+    required this.count,
+    required this.label,
+    required this.color,
+    required this.icon,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color.withOpacity(0.8),
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// GradientButton Widget
+class GradientButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+  final IconData? icon;
+  final double? width;
+  final double? height;
+
+  const GradientButton({
+    Key? key,
+    required this.text,
+    required this.onPressed,
+    this.icon,
+    this.width,
+    this.height,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height ?? 48,
+      decoration: BoxDecoration(
+        gradient: ModernTheme.primaryGradient,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: ModernTheme.primaryBlue.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
