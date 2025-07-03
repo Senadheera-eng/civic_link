@@ -661,13 +661,13 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
-                      height: 36,
+                      height: 45,
                       child: ElevatedButton.icon(
                         onPressed: () => _showSendReminderDialog(issue),
                         icon: const Icon(Icons.notifications_active, size: 16),
                         label: const Text(
                           'Send Reminder to Department',
-                          style: TextStyle(fontSize: 14),
+                          style: TextStyle(fontSize: 12),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: ModernTheme.warning,
