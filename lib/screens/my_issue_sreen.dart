@@ -1,6 +1,7 @@
-// screens/my_issues_screen.dart (MODERN UI UPDATE)
+// screens/my_issues_screen.dart (Enhanced with Manual Reminder Feature)
 import 'package:flutter/material.dart';
 import '../services/issue_service.dart';
+import '../services/notification_service.dart';
 import '../models/issue_model.dart';
 import '../theme/modern_theme.dart';
 import 'issue_detail_screen.dart';
@@ -15,6 +16,7 @@ class MyIssuesScreen extends StatefulWidget {
 class _MyIssuesScreenState extends State<MyIssuesScreen>
     with TickerProviderStateMixin {
   final IssueService _issueService = IssueService();
+  final NotificationService _notificationService = NotificationService();
   late TabController _tabController;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -376,6 +378,8 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
   Widget _buildModernIssueCard(IssueModel issue, int index) {
     final statusColor = _getStatusColor(issue.status);
     final priorityColor = _getPriorityColor(issue.priority);
+    final canSendReminder = _canSendReminder(issue);
+    final daysSinceCreated = DateTime.now().difference(issue.createdAt).inDays;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -595,6 +599,91 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
               ],
             ),
 
+            // 🆕 MANUAL REMINDER SECTION
+            if (canSendReminder) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      ModernTheme.warning.withOpacity(0.1),
+                      ModernTheme.warning.withOpacity(0.05),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: ModernTheme.warning.withOpacity(0.3),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            gradient: ModernTheme.warningGradient,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.schedule,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Issue Pending',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: ModernTheme.warning,
+                                ),
+                              ),
+                              Text(
+                                'This issue has been pending for $daysSinceCreated days. Send a reminder to the department?',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: ModernTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 36,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showSendReminderDialog(issue),
+                        icon: const Icon(Icons.notifications_active, size: 16),
+                        label: const Text(
+                          'Send Reminder to Department',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: ModernTheme.warning,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             // Admin Notes (if any)
             if (issue.adminNotes != null && issue.adminNotes!.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -663,6 +752,271 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
     );
   }
 
+  // 🆕 MANUAL REMINDER FUNCTIONALITY
+  bool _canSendReminder(IssueModel issue) {
+    // Allow reminders for pending issues that are older than 1 day
+    return issue.status.toLowerCase() == 'pending' &&
+        DateTime.now().difference(issue.createdAt).inDays >= 1;
+  }
+
+  void _showSendReminderDialog(IssueModel issue) {
+    final messageController = TextEditingController();
+    final daysPending = DateTime.now().difference(issue.createdAt).inDays;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.warningGradient,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_active,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Send Manual Reminder',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Issue Information
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ModernTheme.primaryBlue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: ModernTheme.primaryBlue.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          issue.title,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: ModernTheme.primaryBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Department: ${issue.category}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: ModernTheme.textSecondary,
+                          ),
+                        ),
+                        Text(
+                          'Pending for: $daysPending days',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: ModernTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Warning Notice
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ModernTheme.warning.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: ModernTheme.warning.withOpacity(0.3),
+                      ),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: ModernTheme.warning,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'You can only send one reminder per day for each issue.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: ModernTheme.warning,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Message Input
+                  const Text(
+                    'Your Message:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: ModernTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: messageController,
+                    decoration: const InputDecoration(
+                      hintText: 'Add a message to your reminder...',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    maxLines: 3,
+                    onChanged: (value) {
+                      // Update dialog state if needed
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This message will be sent to all officials in the ${issue.category} department.',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: ModernTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final message = messageController.text.trim();
+                  if (message.isNotEmpty) {
+                    try {
+                      Navigator.pop(context); // Close dialog first
+
+                      // Show loading
+                      _showLoadingDialog();
+
+                      await _notificationService.sendManualReminderToDepartment(
+                        issueId: issue.id,
+                        issueTitle: issue.title,
+                        category: issue.category,
+                        citizenMessage: message,
+                      );
+
+                      // Hide loading
+                      Navigator.pop(context);
+
+                      _showSuccessSnackBar(
+                        'Reminder sent to ${issue.category} department!',
+                      );
+                    } catch (e) {
+                      // Hide loading
+                      Navigator.pop(context);
+                      _showErrorSnackBar('Failed to send reminder: $e');
+                    }
+                  } else {
+                    _showErrorSnackBar(
+                      'Please enter a message for your reminder',
+                    );
+                  }
+                },
+                icon: const Icon(Icons.send),
+                label: const Text('Send Reminder'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ModernTheme.warning,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (context) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Sending reminder...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // Helper methods (existing ones remain the same)
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
