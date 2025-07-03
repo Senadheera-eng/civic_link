@@ -392,7 +392,7 @@ class _DepartmentNotificationsScreenState
                 ),
                 const SizedBox(width: 16),
 
-                // Content
+                // Content - FIX: Add proper constraints
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,6 +400,7 @@ class _DepartmentNotificationsScreenState
                       Row(
                         children: [
                           Expanded(
+                            // FIX: Wrap with Expanded
                             child: Text(
                               notification.title,
                               style: TextStyle(
@@ -410,9 +411,12 @@ class _DepartmentNotificationsScreenState
                                         : FontWeight.bold,
                                 color: ModernTheme.textPrimary,
                               ),
+                              maxLines: 2, // FIX: Allow 2 lines
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (!notification.isRead)
+                          if (!notification.isRead) ...[
+                            const SizedBox(width: 8),
                             Container(
                               width: 8,
                               height: 8,
@@ -421,6 +425,7 @@ class _DepartmentNotificationsScreenState
                                 shape: BoxShape.circle,
                               ),
                             ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -431,34 +436,34 @@ class _DepartmentNotificationsScreenState
                           color: ModernTheme.textSecondary,
                           height: 1.4,
                         ),
+                        maxLines: 3, // FIX: Limit lines
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 12),
 
-                      // Metadata
-                      Row(
+                      // Metadata - FIX: Use Wrap for better layout
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           _buildInfoChip(
-                            'From: $citizenName',
+                            'From: ${citizenName.length > 15 ? '${citizenName.substring(0, 15)}...' : citizenName}',
                             Icons.person,
                             ModernTheme.accent,
                           ),
-                          const SizedBox(width: 8),
                           _buildInfoChip(
                             notification.timeAgo,
                             Icons.access_time,
                             ModernTheme.textTertiary,
                           ),
+                          if (issueId != null)
+                            _buildInfoChip(
+                              'Issue: ${(notification.data['issueTitle'] ?? issueId).toString().length > 20 ? '${(notification.data['issueTitle'] ?? issueId).toString().substring(0, 20)}...' : (notification.data['issueTitle'] ?? issueId)}',
+                              Icons.report_problem,
+                              ModernTheme.primaryBlue,
+                            ),
                         ],
                       ),
-
-                      if (issueId != null) ...[
-                        const SizedBox(height: 8),
-                        _buildInfoChip(
-                          'Issue: ${notification.data['issueTitle'] ?? issueId}',
-                          Icons.report_problem,
-                          ModernTheme.primaryBlue,
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -468,6 +473,7 @@ class _DepartmentNotificationsScreenState
             // Action Buttons
             if (canReply || issueId != null) ...[
               const SizedBox(height: 16),
+              // FIX: Better button layout
               Row(
                 children: [
                   if (issueId != null)
@@ -475,9 +481,15 @@ class _DepartmentNotificationsScreenState
                       child: OutlinedButton.icon(
                         onPressed: () => _navigateToIssue(issueId),
                         icon: const Icon(Icons.open_in_new, size: 16),
-                        label: const Text('View Issue'),
+                        label: const Text(
+                          'View Issue',
+                          style: TextStyle(fontSize: 13), // FIX: Smaller font
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: ModernTheme.primaryBlue,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                          ), // FIX: Smaller padding
                         ),
                       ),
                     ),
@@ -487,10 +499,16 @@ class _DepartmentNotificationsScreenState
                       child: ElevatedButton.icon(
                         onPressed: () => _showDetailedReplyDialog(notification),
                         icon: const Icon(Icons.reply, size: 16),
-                        label: const Text('Reply'),
+                        label: const Text(
+                          'Reply',
+                          style: TextStyle(fontSize: 13), // FIX: Smaller font
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: ModernTheme.accent,
                           foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                          ), // FIX: Smaller padding
                         ),
                       ),
                     ),

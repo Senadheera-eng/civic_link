@@ -445,6 +445,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
         List<NotificationModel> notifications = snapshot.data ?? [];
 
+        // FIX: Filter out test notifications
+        notifications =
+            notifications
+                .where((notification) => notification.type != 'test')
+                .toList();
+
         // Filter notifications if needed
         if (_showUnreadOnly) {
           notifications = notifications.where((n) => !n.isRead).toList();
@@ -862,12 +868,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
-          GradientButton(
-            text: 'Create Test Notification',
-            onPressed: _createTestNotification,
-            width: 200,
-            height: 44,
-            icon: Icons.bug_report,
+          const Text(
+            'When you receive notifications, they will appear here.',
+            style: TextStyle(fontSize: 14, color: ModernTheme.textTertiary),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

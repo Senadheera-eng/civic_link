@@ -891,9 +891,6 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
                       contentPadding: EdgeInsets.all(12),
                     ),
                     maxLines: 3,
-                    onChanged: (value) {
-                      // Update dialog state if needed
-                    },
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -911,46 +908,69 @@ class _MyIssuesScreenState extends State<MyIssuesScreen>
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancel'),
               ),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final message = messageController.text.trim();
-                  if (message.isNotEmpty) {
-                    try {
-                      Navigator.pop(context); // Close dialog first
+              StatefulBuilder(
+                builder: (context, setState) {
+                  bool isLoading = false;
 
-                      // Show loading
-                      _showLoadingDialog();
+                  return ElevatedButton.icon(
+                    onPressed:
+                        isLoading
+                            ? null
+                            : () async {
+                              final message = messageController.text.trim();
+                              if (message.isNotEmpty) {
+                                setState(() {
+                                  isLoading = true;
+                                });
 
-                      await _notificationService.sendManualReminderToDepartment(
-                        issueId: issue.id,
-                        issueTitle: issue.title,
-                        category: issue.category,
-                        citizenMessage: message,
-                      );
+                                try {
+                                  await _notificationService
+                                      .sendManualReminderToDepartment(
+                                        issueId: issue.id,
+                                        issueTitle: issue.title,
+                                        category: issue.category,
+                                        citizenMessage: message,
+                                      );
 
-                      // Hide loading
-                      Navigator.pop(context);
+                                  // FIX: Close dialog BEFORE showing success message
+                                  Navigator.pop(context);
 
-                      _showSuccessSnackBar(
-                        'Reminder sent to ${issue.category} department!',
-                      );
-                    } catch (e) {
-                      // Hide loading
-                      Navigator.pop(context);
-                      _showErrorSnackBar('Failed to send reminder: $e');
-                    }
-                  } else {
-                    _showErrorSnackBar(
-                      'Please enter a message for your reminder',
-                    );
-                  }
+                                  // FIX: Show success message
+                                  _showSuccessSnackBar(
+                                    'Reminder sent to ${issue.category} department successfully!',
+                                  );
+                                } catch (e) {
+                                  setState(() {
+                                    isLoading = false;
+                                  });
+                                  _showErrorSnackBar(
+                                    'Failed to send reminder: $e',
+                                  );
+                                }
+                              } else {
+                                _showErrorSnackBar(
+                                  'Please enter a message for your reminder',
+                                );
+                              }
+                            },
+                    icon:
+                        isLoading
+                            ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                            : const Icon(Icons.send),
+                    label: Text(isLoading ? 'Sending...' : 'Send Reminder'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ModernTheme.warning,
+                      foregroundColor: Colors.white,
+                    ),
+                  );
                 },
-                icon: const Icon(Icons.send),
-                label: const Text('Send Reminder'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ModernTheme.warning,
-                  foregroundColor: Colors.white,
-                ),
               ),
             ],
           ),
