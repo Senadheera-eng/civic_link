@@ -1340,7 +1340,37 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
     if (confirmed == true) {
       try {
+        // FIX: Show loading indicator
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                ),
+                SizedBox(width: 12),
+                Text('Deleting notification...'),
+              ],
+            ),
+            backgroundColor: ModernTheme.primaryBlue,
+            duration: Duration(seconds: 1),
+          ),
+        );
+
         await _notificationService.deleteNotification(notification.id);
+
+        // FIX: Force UI refresh by calling setState
+        if (mounted) {
+          setState(() {
+            // This will trigger a rebuild and the stream will update
+          });
+        }
+
         _showSuccessSnackBar('Notification deleted');
       } catch (e) {
         _showErrorSnackBar('Failed to delete notification: $e');
