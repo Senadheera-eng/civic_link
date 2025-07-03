@@ -189,12 +189,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     case 'delete_all':
                       _showDeleteAllDialog();
                       break;
-                    case 'test_notification':
-                      _createTestNotification();
-                      break;
-                    case 'schedule_reminders':
-                      _scheduleWeeklyReminders();
-                      break;
+                    // FIX: REMOVE test notification and check reminders options
                     case 'settings':
                       _openNotificationSettings();
                       break;
@@ -236,26 +231,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                         ),
                       ),
                       const PopupMenuDivider(),
-                      const PopupMenuItem(
-                        value: 'test_notification',
-                        child: Row(
-                          children: [
-                            Icon(Icons.bug_report),
-                            SizedBox(width: 12),
-                            Text('Test Notification'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'schedule_reminders',
-                        child: Row(
-                          children: [
-                            Icon(Icons.schedule),
-                            SizedBox(width: 12),
-                            Text('Check Reminders'),
-                          ],
-                        ),
-                      ),
+                      // FIX: REMOVE these items:
+                      // - Test Notification
+                      // - Check Reminders
                       const PopupMenuItem(
                         value: 'settings',
                         child: Row(
@@ -363,10 +341,14 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               ],
             ),
           ),
-          FutureBuilder<int>(
-            future: _notificationService.getUnreadCount(),
+          // FIX: Use StreamBuilder to get real-time unread count (excluding tests)
+          StreamBuilder<List<NotificationModel>>(
+            stream: _notificationService.getUserNotificationsStream(),
             builder: (context, snapshot) {
-              final unreadCount = snapshot.data ?? 0;
+              if (!snapshot.hasData) return const SizedBox.shrink();
+
+              // FIX: Count unread notifications from filtered stream
+              final unreadCount = snapshot.data!.where((n) => !n.isRead).length;
               if (unreadCount == 0) return const SizedBox.shrink();
 
               return Container(
@@ -1279,25 +1261,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             ],
           ),
     );
-  }
-
-  // Notification Management Methods
-  void _createTestNotification() async {
-    try {
-      await _notificationService.createTestNotification();
-      _showSuccessSnackBar('Test notification created!');
-    } catch (e) {
-      _showErrorSnackBar('Failed to create test notification: $e');
-    }
-  }
-
-  void _scheduleWeeklyReminders() async {
-    try {
-      await _notificationService.scheduleWeeklyReminders();
-      _showSuccessSnackBar('Weekly reminders checked and sent if needed!');
-    } catch (e) {
-      _showErrorSnackBar('Failed to schedule reminders: $e');
-    }
   }
 
   void _markAllAsRead() async {

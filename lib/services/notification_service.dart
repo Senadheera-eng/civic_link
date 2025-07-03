@@ -790,19 +790,34 @@ class NotificationService {
           print(
             "🔔 Notifications stream update: ${snapshot.docs.length} documents",
           );
-          return snapshot.docs
-              .map((doc) {
-                try {
-                  return NotificationModel.fromFirestore(doc);
-                } catch (e) {
-                  print("❌ Error parsing notification document ${doc.id}: $e");
-                  print("📄 Document data: ${doc.data()}");
-                  return null;
-                }
-              })
-              .where((notification) => notification != null)
-              .cast<NotificationModel>()
-              .toList();
+
+          final notifications =
+              snapshot.docs
+                  .map((doc) {
+                    try {
+                      return NotificationModel.fromFirestore(doc);
+                    } catch (e) {
+                      print(
+                        "❌ Error parsing notification document ${doc.id}: $e",
+                      );
+                      print("📄 Document data: ${doc.data()}");
+                      return null;
+                    }
+                  })
+                  .where((notification) => notification != null)
+                  .cast<NotificationModel>()
+                  .toList();
+
+          // FIX: Filter out test notifications from the stream
+          final filteredNotifications =
+              notifications
+                  .where((notification) => notification.type != 'test')
+                  .toList();
+
+          print(
+            "🔔 Filtered notifications (no tests): ${filteredNotifications.length}",
+          );
+          return filteredNotifications;
         });
   }
 
@@ -905,15 +920,24 @@ class NotificationService {
       final user = _auth.currentUser;
       if (user == null) return 0;
 
+      // FIX: Get all notifications and filter out test notifications
       final snapshot =
           await _firestore
               .collection('notifications')
               .where('userId', isEqualTo: user.uid)
               .where('isRead', isEqualTo: false)
-              .count()
               .get();
 
-      return snapshot.count ?? 0;
+      // FIX: Filter out test notifications from count
+      final nonTestNotifications =
+          snapshot.docs.where((doc) {
+            final data = doc.data();
+            final notificationType = data['data']?['type'] ?? '';
+            return notificationType != 'test';
+          }).toList();
+
+      print("✅ Unread count (excluding tests): ${nonTestNotifications.length}");
+      return nonTestNotifications.length;
     } catch (e) {
       print("❌ Error getting unread count: $e");
       return 0;
