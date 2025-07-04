@@ -325,39 +325,69 @@ class _IssueMapScreenState extends State<IssueMapScreen>
         child: SafeArea(
           child: FadeTransition(
             opacity: _fadeAnimation,
+            child:
+                _showMapView ? _buildMapViewLayout() : _buildListViewLayout(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapViewLayout() {
+    return Column(
+      children: [
+        _buildModernHeader(),
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.only(top: 16),
+            decoration: const BoxDecoration(
+              color: ModernTheme.background,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(32),
+                topRight: Radius.circular(32),
+              ),
+            ),
             child: Column(
               children: [
-                _buildModernHeader(),
-                Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 16),
-                    decoration: const BoxDecoration(
-                      color: ModernTheme.background,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(32),
-                        topRight: Radius.circular(32),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildLocationStatus(),
-                        _buildViewToggle(),
-                        if (!_showMapView) _buildFilters(),
-                        Expanded(
-                          child:
-                              _showMapView
-                                  ? _buildMapView()
-                                  : _buildIssuesList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _buildLocationStatus(),
+                _buildViewToggle(),
+                Expanded(child: _buildMapView()),
               ],
             ),
           ),
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _buildListViewLayout() {
+    return CustomScrollView(
+      slivers: [
+        // Header as a sliver
+        SliverToBoxAdapter(child: _buildModernHeader()),
+
+        // Main content area
+        SliverFillRemaining(
+          child: Container(
+            margin: const EdgeInsets.only(top: 16),
+            decoration: const BoxDecoration(
+              color: ModernTheme.background,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(32),
+                topRight: Radius.circular(32),
+              ),
+            ),
+            child: Column(
+              children: [
+                _buildLocationStatus(),
+                _buildViewToggle(),
+                _buildFilters(),
+                Expanded(child: _buildIssuesList()),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1085,69 +1115,66 @@ class _IssueMapScreenState extends State<IssueMapScreen>
       );
     }
 
-    return Column(
-      children: [
-        // Results header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  gradient: ModernTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${_nearbyIssues.length} Issues Found',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
+    // Return ListView directly without wrapping Column
+    return ListView.builder(
+      padding: const EdgeInsets.all(24),
+      physics: const BouncingScrollPhysics(),
+      itemCount: _nearbyIssues.length + 1, // +1 for header
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          // Results header
+          return Container(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_nearbyIssues.length} Issues Found',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                _locationMode == 'selected'
-                    ? 'At selected location'
-                    : _selectedLocationFilter == 'nearby'
-                    ? 'Within ${_radiusKm.toStringAsFixed(1)}km'
-                    : _selectedLocationFilter == 'city'
-                    ? 'In your city'
-                    : 'All locations',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: ModernTheme.textSecondary,
+                const Spacer(),
+                Text(
+                  _locationMode == 'selected'
+                      ? 'At selected location'
+                      : _selectedLocationFilter == 'nearby'
+                      ? 'Within ${_radiusKm.toStringAsFixed(1)}km'
+                      : _selectedLocationFilter == 'city'
+                      ? 'In your city'
+                      : 'All locations',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: ModernTheme.textSecondary,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+          );
+        }
 
-        // Issues list
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            physics: const BouncingScrollPhysics(),
-            itemCount: _nearbyIssues.length,
-            itemBuilder: (context, index) {
-              final issue = _nearbyIssues[index];
-              final distance = Geolocator.distanceBetween(
-                centerLocation!.latitude,
-                centerLocation.longitude,
-                issue.latitude,
-                issue.longitude,
-              );
+        // Issue cards
+        final issue = _nearbyIssues[index - 1];
+        final distance = Geolocator.distanceBetween(
+          centerLocation!.latitude,
+          centerLocation.longitude,
+          issue.latitude,
+          issue.longitude,
+        );
 
-              return _buildIssueCard(issue, distance);
-            },
-          ),
-        ),
-      ],
+        return _buildIssueCard(issue, distance);
+      },
     );
   }
 
