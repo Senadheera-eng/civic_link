@@ -1,14 +1,14 @@
 buildscript {
-    ext.kotlin_version = '2.1.21'
+    ext.kotlin_version = '1.9.10'  // Downgraded for compatibility
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.0'
+        classpath 'com.android.tools.build:gradle:7.4.2'  // Downgraded for Flutter compatibility
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath 'com.google.gms:google-services:4.4.0'  // Updated version
+        classpath 'com.google.gms:google-services:4.4.1'
     }
 }
 
@@ -19,7 +19,7 @@ allprojects {
     }
 }
 
-rootProject.buildDir = '../build'
+rootProject.buildDir = '../build'  // Using old syntax for AGP 7.4.2
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
