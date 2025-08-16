@@ -7,7 +7,7 @@ import '../models/user_model.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  //final GoogleSignIn _googleSignIn = GoogleSignIn();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Stream<User?> get authStateChanges {
@@ -227,7 +227,7 @@ class AuthService {
     }
   }
 
-  Future<UserCredential?> signInWithGoogle() async {
+  /*Future<UserCredential?> signInWithGoogle() async {
     try {
       print("🔐 AuthService: Starting Google sign in");
 
@@ -267,7 +267,7 @@ class AuthService {
       print("❌ Google sign in error: $e");
       throw 'Google sign-in failed: ${e.toString()}';
     }
-  }
+  }*/
 
   Future<void> _createUserDocument(
     User user,
@@ -592,12 +592,12 @@ class AuthService {
       );
 
       // Sign out from Google first
-      try {
+      /*try {
         await _googleSignIn.signOut();
         print("✅ Google sign out successful");
       } catch (e) {
         print("⚠️ Google sign out error (may be normal): $e");
-      }
+      }*/
 
       // Sign out from Firebase
       await _auth.signOut();
