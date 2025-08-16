@@ -18,7 +18,7 @@ def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '
 android {
     compileSdk flutter.compileSdkVersion
     namespace "com.example.civic_link"
-    compileSdk=36
+    compileSdk=35
     ndkVersion "27.0.12077973"
 
     compileOptions {
@@ -34,7 +34,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.civic_link"
-        minSdkVersion flutter.minSdkVersion  // CHANGED FROM 21 TO 23 - This fixes the Firebase Auth error
+        minSdk 23  // CHANGED FROM 21 TO 23 - This fixes the Firebase Auth error
         targetSdk 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
