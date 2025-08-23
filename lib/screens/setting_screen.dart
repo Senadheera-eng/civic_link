@@ -5,7 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import '../services/settings_service.dart';
 import '../models/user_model.dart';
-import '../theme/modern_theme.dart';
+import '../theme/modern_theme.dart' hide ModernCard;
+import 'citizen_help_support_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -51,6 +52,33 @@ class _SettingsScreenState extends State<SettingsScreen>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
     _fadeController.forward();
+  }
+
+  void _helpSupport() {
+    // Check if user is a citizen to show comprehensive help
+    if (_userData?.userType == 'citizen') {
+      // Navigate to the comprehensive Citizen Help & Support screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const CitizenHelpSupportScreen(),
+        ),
+      );
+    } else {
+      // For officials, show simple contact dialog
+      _showDialog(
+        'Help & Support',
+        'Need help? Contact our support team!\n\n'
+            '📧 Email: civiclink.official@gmail.com\n'
+            '📞 Phone: +1 (555) 123-4567\n'
+            '🌐 Website: www.civiclink.com\n\n'
+            'Business Hours:\n'
+            'Monday - Friday: 9:00 AM - 6:00 PM\n'
+            'Saturday: 10:00 AM - 4:00 PM\n'
+            'Sunday: Closed\n\n'
+            'For technical issues, please include your account type (Official) and department information.',
+      );
+    }
   }
 
   @override
@@ -829,21 +857,6 @@ class _SettingsScreenState extends State<SettingsScreen>
           _showErrorSnackBar('Failed to export data: $e');
         }
       },
-    );
-  }
-
-  void _helpSupport() {
-    _showDialog(
-      'Help & Support',
-      'Need help? We\'re here for you!\n\n'
-          '📧 Email: support@civiclink.com\n'
-          '📞 Phone: +1 (555) 123-4567\n'
-          '🌐 Website: www.civiclink.com\n\n'
-          'Business Hours:\n'
-          'Monday - Friday: 9:00 AM - 6:00 PM\n'
-          'Saturday: 10:00 AM - 4:00 PM\n'
-          'Sunday: Closed\n\n'
-          'You can also visit our website for FAQs and documentation.',
     );
   }
 
