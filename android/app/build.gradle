@@ -33,7 +33,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.civic_link"
-        minSdk 23  // CHANGED FROM 21 TO 23 - This fixes the Firebase Auth error
+        minSdkVersion flutter.minSdkVersion  // CHANGED FROM 21 TO 23 - This fixes the Firebase Auth error
         targetSdk 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
