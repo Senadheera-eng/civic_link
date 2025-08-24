@@ -1,8 +1,9 @@
 // screens/settings_screen.dart (UPDATED VERSION)
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import '../services/auth_service.dart';
 import '../services/settings_service.dart';
 import '../models/user_model.dart';
@@ -209,7 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  // NEW: Contact Support functionality
+  // NEW: Direct Email Launch (Simple approach)
   void _showContactSupportDialog() {
     showDialog(
       context: context,
@@ -240,9 +241,15 @@ class _SettingsScreenState extends State<SettingsScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: ModernTheme.primaryGradient.scale(0.1),
+                    gradient: LinearGradient(
+                      colors: [
+                        ModernTheme.primaryBlue.withOpacity(0.1),
+                        ModernTheme.primaryBlue.withOpacity(0.05),
+                      ],
+                    ),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: ModernTheme.primaryBlue.withOpacity(0.2),
@@ -278,48 +285,62 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.email,
-                      color: ModernTheme.primaryBlue,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'civiclink.official@gmail.com',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: ModernTheme.primaryBlue,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
+
+                // Email address display
                 Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: ModernTheme.warning.withOpacity(0.1),
+                    color: Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: ModernTheme.warning.withOpacity(0.3),
-                    ),
+                    border: Border.all(color: Colors.grey.shade300),
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        Icons.info_outline,
+                        Icons.email,
+                        color: ModernTheme.primaryBlue,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'civiclink.official@gmail.com',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: ModernTheme.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Response time info
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.success.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
                         size: 16,
-                        color: ModernTheme.warning,
+                        color: ModernTheme.success,
                       ),
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
-                          'This will open your email app',
+                          'We typically respond within 24 hours',
                           style: TextStyle(
                             fontSize: 12,
-                            color: ModernTheme.warning,
+                            color: ModernTheme.success,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -334,9 +355,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                 child: const Text('Cancel'),
               ),
               ElevatedButton.icon(
-                onPressed: () async {
+                onPressed: () {
                   Navigator.pop(context);
-                  await _openEmailApp();
+                  _launchEmailApp();
                 },
                 icon: const Icon(Icons.email),
                 label: const Text('Email Us'),
@@ -350,25 +371,119 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  // Simple email app launcher
-  Future<void> _openEmailApp() async {
-    final String email = 'civiclink.official@gmail.com';
-
-    final Uri emailUri = Uri(scheme: 'mailto', path: email);
+  // Simple email launcher using url_launcher_string
+  Future<void> _launchEmailApp() async {
+    final String emailUrl = 'mailto:civiclink.official@gmail.com';
 
     try {
-      if (await canLaunchUrl(emailUri)) {
-        await launchUrl(emailUri);
-        _showSuccessSnackBar('Email app opened successfully!');
+      bool launched = await launchUrlString(emailUrl);
+      if (launched) {
+        _showSuccessSnackBar('Opening email app...');
       } else {
-        _showErrorSnackBar(
-          'Unable to open email app. Please email us manually at: $email',
-        );
+        _showFallbackOptions();
       }
     } catch (e) {
-      _showErrorSnackBar(
-        'Unable to open email app. Please email us manually at: $email',
-      );
+      print('Email launch failed: $e');
+      _showFallbackOptions();
+    }
+  }
+
+  // Fallback if email app doesn't open
+  void _showFallbackOptions() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.info_outline, color: ModernTheme.primaryBlue),
+                SizedBox(width: 12),
+                Text('Email App Not Available'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'We couldn\'t open your email app automatically. Here\'s what you can do:',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.email,
+                        color: ModernTheme.primaryBlue,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'civiclink.official@gmail.com',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: ModernTheme.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '1. Copy the email address above\n2. Open Gmail, Outlook, or your email app\n3. Create a new email\n4. Paste our email address and send your message',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: ModernTheme.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _copyEmailToClipboard();
+                  Navigator.pop(context);
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy Email'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ModernTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Copy email to clipboard
+  Future<void> _copyEmailToClipboard() async {
+    const String email = 'civiclink.official@gmail.com';
+
+    try {
+      await Clipboard.setData(const ClipboardData(text: email));
+      _showSuccessSnackBar('Email address copied to clipboard!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to copy email address');
     }
   }
 
