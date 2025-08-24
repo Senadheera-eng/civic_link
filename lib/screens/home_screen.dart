@@ -3,7 +3,8 @@ import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
 import 'package:civic_link/screens/notifications_screen.dart';
 import 'package:civic_link/services/notification_service.dart';
-import 'package:civic_link/screens/setting_screen.dart';
+import 'package:civic_link/screens/setting_screen.dart'
+    hide ModernStatusChip, ModernCard;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
