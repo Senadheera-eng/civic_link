@@ -1,8 +1,10 @@
-// screens/citizen_help_support_screen.dart
+// screens/citizen_help_support_screen.dart (FIXED VERSION)
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/modern_theme.dart';
+import '../widgets/modern_card.dart';
+import '../widgets/gradient_button.dart';
 
 class CitizenHelpSupportScreen extends StatefulWidget {
   const CitizenHelpSupportScreen({Key? key}) : super(key: key);
@@ -14,31 +16,23 @@ class CitizenHelpSupportScreen extends StatefulWidget {
 
 class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     with TickerProviderStateMixin {
+  late TabController _tabController;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
-  // Add controllers for email support
-  final TextEditingController _subjectController = TextEditingController();
-  final TextEditingController _messageController = TextEditingController();
-
-  String _searchQuery = '';
-  int _selectedTabIndex = 0;
-  String _selectedPriority = 'Medium';
-  bool _isLoading = false;
-
-  final List<String> _categories = [
-    'Getting Started',
-    'Reporting Issues',
-    'Tracking Issues',
-    'Account Management',
-    'Troubleshooting',
-    'Email Support',
-  ];
+  // Email form controllers
+  final _fromEmailController = TextEditingController();
+  final _subjectController = TextEditingController();
+  final _messageController = TextEditingController();
+  bool _isComposing = false;
+  bool _isSending = false;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _initAnimations();
+    _loadUserEmail();
   }
 
   void _initAnimations() {
@@ -53,90 +47,639 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     _fadeController.forward();
   }
 
+  void _loadUserEmail() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _fromEmailController.text = user.email ?? '';
+    }
+  }
+
   @override
   void dispose() {
+    _tabController.dispose();
     _fadeController.dispose();
+    _fromEmailController.dispose();
     _subjectController.dispose();
     _messageController.dispose();
     super.dispose();
   }
 
+  Future<void> _sendEmail() async {
+    final fromEmail = _fromEmailController.text.trim();
+    final subject = _subjectController.text.trim();
+    final message = _messageController.text.trim();
+
+    if (fromEmail.isEmpty || subject.isEmpty || message.isEmpty) {
+      _showErrorSnackBar('Please fill in all fields');
+      return;
+    }
+
+    if (!_isValidEmail(fromEmail)) {
+      _showErrorSnackBar('Please enter a valid email address');
+      return;
+    }
+
+    setState(() => _isSending = true);
+
+    try {
+      // Send email to Firestore for admin processing
+      await FirebaseFirestore.instance.collection('support_emails').add({
+        'from': fromEmail,
+        'to': 'civiclink.official@gmail.com',
+        'subject': subject,
+        'message': message,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'pending',
+        'userId': FirebaseAuth.instance.currentUser?.uid,
+      });
+
+      _showSuccessSnackBar(
+        'Email sent successfully! We will respond within 24-48 hours.',
+      );
+
+      // Clear the form
+      _subjectController.clear();
+      _messageController.clear();
+      setState(() => _isComposing = false);
+    } catch (e) {
+      _showErrorSnackBar('Failed to send email. Please try again.');
+    } finally {
+      setState(() => _isSending = false);
+    }
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: Column(
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Column(
+            children: [
+              _buildProfessionalHeader(),
+              if (!_isComposing) _buildColorfulTabBar(),
+              Expanded(
+                child:
+                    _isComposing
+                        ? _buildSimpleEmailInterface()
+                        : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildGettingStartedTab(),
+                            _buildFeaturesGuideTab(),
+                            _buildEmailSupportTab(),
+                          ],
+                        ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfessionalHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 25),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              const Spacer(),
+              const Text(
+                'Help & Support',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              const Spacer(),
+              const SizedBox(width: 48),
+            ],
+          ),
+          const SizedBox(height: 15),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+            ),
+            child: const Column(
               children: [
-                _buildHeader(),
-                Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 16),
-                    decoration: const BoxDecoration(
-                      color: ModernTheme.background,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(32),
-                        topRight: Radius.circular(32),
+                Icon(Icons.support_agent, size: 32, color: Colors.white),
+                SizedBox(height: 8),
+                Text(
+                  'We\'re Here to Help!',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Get the most out of CivicLink',
+                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColorfulTabBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicator: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicatorPadding: const EdgeInsets.all(4),
+        labelColor: Colors.white,
+        unselectedLabelColor: const Color(0xFF6B7280),
+        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+        tabs: const [
+          Tab(
+            height: 44,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.rocket_launch, size: 16),
+                SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    'Getting Started',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Tab(
+            height: 44,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.explore, size: 16),
+                SizedBox(width: 4),
+                Flexible(
+                  child: Text('Features', overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          ),
+          Tab(
+            height: 44,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.email, size: 16),
+                SizedBox(width: 4),
+                Flexible(
+                  child: Text('Email Support', overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGettingStartedTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildColorfulStepCard(
+            1,
+            'Create Your First Report',
+            'Tap the "Report Issue" button to get started',
+            Icons.add_circle,
+            const LinearGradient(
+              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+            ),
+            [
+              'Choose a clear, descriptive title',
+              'Select the correct category',
+              'Add photos for better understanding',
+              'Your location is detected automatically',
+            ],
+          ),
+          _buildColorfulStepCard(
+            2,
+            'Track Your Progress',
+            'Monitor all your reports in "My Issues"',
+            Icons.timeline,
+            const LinearGradient(
+              colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
+            ),
+            [
+              'See real-time status updates',
+              'Get notifications when things change',
+              'Send reminders for pending issues',
+              'View detailed response from officials',
+            ],
+          ),
+          _buildColorfulStepCard(
+            3,
+            'Explore Community Issues',
+            'Check the interactive map for nearby issues',
+            Icons.map,
+            const LinearGradient(
+              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+            ),
+            [
+              'Filter by distance and category',
+              'Tap markers to see issue details',
+              'Find issues in your neighborhood',
+              'Switch between map and list views',
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildSuccessTipsCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturesGuideTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildFeatureCard(
+            'Reporting Issues',
+            'Master effective issue reporting',
+            Icons.report_gmailerrorred,
+            const LinearGradient(
+              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+            ),
+            [
+              'Choose descriptive titles',
+              'Select accurate categories',
+              'Include multiple photos',
+              'Write clear descriptions',
+              'Set appropriate priority levels',
+            ],
+          ),
+          _buildFeatureCard(
+            'Issue Tracking',
+            'Stay informed about progress',
+            Icons.track_changes,
+            const LinearGradient(
+              colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
+            ),
+            [
+              'Check "My Issues" regularly',
+              'Understand different statuses',
+              'Read official responses',
+              'Send polite reminders',
+            ],
+          ),
+          _buildFeatureCard(
+            'Community Map',
+            'Explore community awareness',
+            Icons.public,
+            const LinearGradient(
+              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+            ),
+            [
+              'Use filters for specific issues',
+              'Adjust radius for nearby problems',
+              'Tap custom locations to explore',
+              'Report similar issues you notice',
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmailSupportTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildContactCard(),
+          const SizedBox(height: 16),
+          _buildQuickHelpCard(),
+          const SizedBox(height: 24),
+          Container(
+            width: double.infinity,
+            height: 50,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF4F46E5).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                onTap: () => setState(() => _isComposing = true),
+                borderRadius: BorderRadius.circular(12),
+                child: const Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.email, color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Compose Email',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    child: Column(
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleEmailInterface() {
+    return Container(
+      color: const Color(0xFF2D3748),
+      child: Column(
+        children: [
+          // Email header bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(color: Color(0xFF4299E1)),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3182CE),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.send, color: Colors.white, size: 14),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Send',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => setState(() => _isComposing = false),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                ),
+              ],
+            ),
+          ),
+
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  // From field
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 1),
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(color: Color(0xFF4A5568)),
+                    child: Row(
                       children: [
-                        _buildSearchBar(),
-                        _buildTabBar(),
-                        Expanded(child: _buildContent()),
+                        const SizedBox(
+                          width: 50,
+                          child: Text(
+                            'From:',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _fromEmailController,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'your.email@example.com',
+                              hintStyle: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 14,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_drop_down,
+                          color: Colors.white70,
+                          size: 18,
+                        ),
                       ],
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Row(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Help & Support',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: -0.5,
+                  // To field
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 1),
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(color: Color(0xFF4A5568)),
+                    child: const Row(
+                      children: [
+                        SizedBox(
+                          width: 50,
+                          child: Text(
+                            'To',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          'civiclink.official@gmail.com',
+                          style: TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                        Spacer(),
+                        Text(
+                          'Cc',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Bcc',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Text(
-                  'Get help and guidance for CivicLink',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w500,
+
+                  // Subject field
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(color: Color(0xFF4A5568)),
+                    child: TextFormField(
+                      controller: _subjectController,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: const InputDecoration(
+                        hintText: 'Add a subject',
+                        hintStyle: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 14,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        isDense: true,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+
+                  // Message body
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF4A5568),
+                        borderRadius: BorderRadius.all(Radius.circular(4)),
+                      ),
+                      child: TextFormField(
+                        controller: _messageController,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          height: 1.4,
+                          fontSize: 14,
+                        ),
+                        maxLines: null,
+                        expands: true,
+                        textAlignVertical: TextAlignVertical.top,
+                        decoration: const InputDecoration(
+                          hintText:
+                              'Compose your message here...\n\nPlease describe your issue or question in detail.',
+                          hintStyle: TextStyle(
+                            color: Colors.white54,
+                            height: 1.4,
+                            fontSize: 14,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Send button
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      onPressed: _isSending ? null : _sendEmail,
+                      icon:
+                          _isSending
+                              ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(Icons.send, size: 16),
+                      label: Text(_isSending ? 'Sending...' : 'Send Email'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4299E1),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -144,934 +687,458 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      margin: const EdgeInsets.all(24),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: ModernTheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: ModernTheme.primaryBlue.withOpacity(0.3),
-          width: 1.5,
-        ),
-      ),
-      child: TextField(
-        onChanged: (value) => setState(() => _searchQuery = value),
-        decoration: const InputDecoration(
-          hintText: 'Search for help topics...',
-          border: InputBorder.none,
-          prefixIcon: Icon(Icons.search, color: ModernTheme.primaryBlue),
-          suffixIcon: Icon(Icons.mic, color: ModernTheme.textSecondary),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      height: 50,
-      margin: const EdgeInsets.symmetric(horizontal: 24),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final isSelected = _selectedTabIndex == index;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedTabIndex = index),
-            child: Container(
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              decoration: BoxDecoration(
-                gradient: isSelected ? ModernTheme.primaryGradient : null,
-                color: isSelected ? null : ModernTheme.surface,
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(
-                  color:
-                      isSelected
-                          ? Colors.transparent
-                          : ModernTheme.textTertiary.withOpacity(0.3),
-                ),
-              ),
-              child: Text(
-                _categories[index],
-                style: TextStyle(
-                  color: isSelected ? Colors.white : ModernTheme.textPrimary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          if (_selectedTabIndex == 0) _buildGettingStarted(),
-          if (_selectedTabIndex == 1) _buildReportingIssues(),
-          if (_selectedTabIndex == 2) _buildTrackingIssues(),
-          if (_selectedTabIndex == 3) _buildAccountManagement(),
-          if (_selectedTabIndex == 4) _buildTroubleshooting(),
-          if (_selectedTabIndex == 5) _buildEmailSupport(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGettingStarted() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('🚀 Welcome to CivicLink!'),
-        const SizedBox(height: 16),
-
-        _buildGuideCard(
-          title: 'What is CivicLink?',
-          content:
-              'CivicLink is a community problem reporting app that helps citizens report issues like broken roads, streetlight problems, water leaks, and other community concerns directly to local authorities.',
-          icon: Icons.info_outline,
-        ),
-
-        _buildGuideCard(
-          title: 'How it Works',
-          content: '''
-1. 📍 Report: Take a photo and describe the issue
-2. 📍 Location: We automatically detect your location
-3. 🏛️ Route: Your report goes to the right department
-4. 🔔 Track: Get notifications on progress
-5. ✅ Resolve: Issues get fixed faster!
-          ''',
-          icon: Icons.how_to_reg,
-        ),
-
-        _buildGuideCard(
-          title: 'First Steps',
-          content: '''
-• Complete your profile in Settings
-• Enable location services for accurate reporting
-• Turn on notifications to stay updated
-• Explore the map to see community issues
-          ''',
-          icon: Icons.checklist,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReportingIssues() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('📝 How to Report Issues'),
-        const SizedBox(height: 16),
-
-        _buildGuideCard(
-          title: 'Step-by-Step Reporting',
-          content: '''
-1. Tap "Report Issue" on the home screen
-2. Take clear photos of the problem
-3. Write a descriptive title
-4. Choose the correct category
-5. Set priority level (Low/Medium/High/Critical)
-6. Add detailed description
-7. Confirm location is accurate
-8. Submit your report
-          ''',
-          icon: Icons.assignment,
-        ),
-
-        _buildGuideCard(
-          title: 'Taking Good Photos',
-          content: '''
-• Take multiple angles of the issue
-• Ensure good lighting
-• Include landmarks for context
-• Show the full extent of the problem
-• Avoid blurry or dark photos
-          ''',
-          icon: Icons.camera_alt,
-        ),
-
-        _buildGuideCard(
-          title: 'Choosing Categories',
-          content: '''
-🚧 Road & Transportation: Potholes, road damage, traffic issues
-💧 Water & Sewerage: Leaks, blockages, water quality
-⚡ Electricity: Power outages, faulty lines
-🛡️ Public Safety: Dangerous areas, security concerns
-🗑️ Waste Management: Garbage collection, illegal dumping
-🌳 Parks & Recreation: Damaged facilities, maintenance
-💡 Street Lighting: Broken lights, dark areas
-🏢 Public Buildings: Facility issues
-🚦 Traffic Management: Signal problems, signs
-🌍 Environmental Issues: Pollution, tree hazards
-          ''',
-          icon: Icons.category,
-        ),
-
-        _buildGuideCard(
-          title: 'Priority Levels',
-          content: '''
-🔴 Critical: Immediate danger to public safety
-🟠 High: Significant impact, needs urgent attention
-🟡 Medium: Important but not urgent
-🟢 Low: Minor issues, can wait for scheduled maintenance
-          ''',
-          icon: Icons.priority_high,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTrackingIssues() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('📊 Tracking Your Issues'),
-        const SizedBox(height: 16),
-
-        _buildGuideCard(
-          title: 'Issue Status Meanings',
-          content: '''
-⏳ Pending: Your report has been submitted and is awaiting review
-🔧 In Progress: Authorities are actively working on the issue
-✅ Resolved: The issue has been fixed
-❌ Rejected: The report was declined (with reason provided)
-          ''',
-          icon: Icons.track_changes,
-        ),
-
-        _buildGuideCard(
-          title: 'Using My Issues Screen',
-          content: '''
-• View all your reported issues
-• Filter by status (All, Pending, In Progress, Resolved)
-• Tap any issue to see detailed progress
-• Send manual reminders for pending issues
-• Track resolution timeline
-          ''',
-          icon: Icons.list_alt,
-        ),
-
-        _buildGuideCard(
-          title: 'Notifications',
-          content: '''
-You'll receive notifications when:
-• Your issue status changes
-• Authorities add comments or updates
-• Resolution is completed
-• Reminders are due
-          ''',
-          icon: Icons.notifications,
-        ),
-
-        _buildGuideCard(
-          title: 'Manual Reminders',
-          content: '''
-For issues pending more than 24 hours:
-• Go to "My Issues"
-• Find the pending issue
-• Tap "Send Reminder"
-• Add a personal message
-• One reminder per day allowed
-          ''',
-          icon: Icons.schedule_send,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAccountManagement() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('👤 Managing Your Account'),
-        const SizedBox(height: 16),
-
-        _buildGuideCard(
-          title: 'Profile Settings',
-          content: '''
-• Update your name and personal information
-• Change your password regularly
-• Verify your email address
-• Upload a profile picture
-          ''',
-          icon: Icons.person,
-        ),
-
-        _buildGuideCard(
-          title: 'Notification Preferences',
-          content: '''
-Customize your notifications:
-• Enable/disable push notifications
-• Set email notification preferences
-• Choose notification types
-• Set quiet hours
-          ''',
-          icon: Icons.settings_applications,
-        ),
-
-        _buildGuideCard(
-          title: 'Privacy Settings',
-          content: '''
-• Control location sharing
-• Manage data visibility
-• Review privacy policy
-• Export your data
-• Delete account (if needed)
-          ''',
-          icon: Icons.privacy_tip,
-        ),
-
-        _buildGuideCard(
-          title: 'App Preferences',
-          content: '''
-• Switch between light/dark mode
-• Change language settings
-• Enable/disable sounds
-• Update app when available
-          ''',
-          icon: Icons.tune,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTroubleshooting() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('🔧 Common Issues & Solutions'),
-        const SizedBox(height: 16),
-
-        _buildGuideCard(
-          title: 'App Not Loading',
-          content: '''
-Try these steps:
-1. Check your internet connection
-2. Close and reopen the app
-3. Restart your device
-4. Update the app from app store
-5. Clear app cache (Android)
-          ''',
-          icon: Icons.refresh,
-        ),
-
-        _buildGuideCard(
-          title: 'Location Issues',
-          content: '''
-If location is not working:
-1. Enable location services in device settings
-2. Grant location permission to CivicLink
-3. Turn on "High Accuracy" location mode
-4. Restart the app
-5. Check if GPS is working in other apps
-          ''',
-          icon: Icons.location_off,
-        ),
-
-        _buildGuideCard(
-          title: 'Camera Problems',
-          content: '''
-Camera not working:
-1. Grant camera permission to CivicLink
-2. Check if camera works in other apps
-3. Restart the app
-4. Clear app cache
-5. Update the app
-          ''',
-          icon: Icons.camera_alt,
-        ),
-
-        _buildGuideCard(
-          title: 'Notification Issues',
-          content: '''
-Not receiving notifications:
-1. Check notification settings in app
-2. Enable notifications in device settings
-3. Check "Do Not Disturb" mode
-4. Update the app
-5. Re-login to your account
-          ''',
-          icon: Icons.notifications_off,
-        ),
-
-        _buildGuideCard(
-          title: 'Login Problems',
-          content: '''
-Can't login:
-1. Check email and password
-2. Use "Forgot Password" option
-3. Check internet connection
-4. Clear app cache
-5. Contact support if issue persists
-          ''',
-          icon: Icons.login,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.bold,
-        color: ModernTheme.textPrimary,
-      ),
-    );
-  }
-
-  Widget _buildGuideCard({
-    required String title,
-    required String content,
-    required IconData icon,
-    Widget? customContent,
-  }) {
+  Widget _buildColorfulStepCard(
+    int step,
+    String title,
+    String description,
+    IconData icon,
+    LinearGradient gradient,
+    List<String> points,
+  ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: ModernCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      step.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(icon, color: Colors.white, size: 24),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children:
+                  points
+                      .map(
+                        (point) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 4,
+                                height: 4,
+                                margin: const EdgeInsets.only(
+                                  top: 6,
+                                  right: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: gradient,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  point,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF374151),
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureCard(
+    String title,
+    String subtitle,
+    IconData icon,
+    LinearGradient gradient,
+    List<String> features,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    gradient: ModernTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(8),
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: ModernTheme.textPrimary,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            if (customContent != null)
-              customContent
-            else
-              Text(
-                content,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: ModernTheme.textSecondary,
-                  height: 1.5,
-                ),
-              ),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children:
+                  features
+                      .map(
+                        (feature) => Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  gradient: gradient,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  feature,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF374151),
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildEmailSupport() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('📧 Contact Support Team'),
-        const SizedBox(height: 16),
-
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: ModernTheme.accentGradient,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: ModernTheme.accent.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.support_agent, color: Colors.white, size: 28),
-              SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Send Message Directly',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      'Compose and send your support request directly through the app.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+  Widget _buildSuccessTipsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF10B981), Color(0xFF059669)],
         ),
-
-        const SizedBox(height: 24),
-
-        // Email Composition Form
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: ModernTheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: ModernTheme.primaryBlue.withOpacity(0.3),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10B981).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      gradient: ModernTheme.primaryGradient,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.email,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Compose Support Message',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: ModernTheme.textPrimary,
-                    ),
-                  ),
-                ],
+        ],
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.emoji_events, color: Colors.white, size: 32),
+          SizedBox(height: 12),
+          Text(
+            'Success Tips',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Follow these tips to get the best results from your reports!',
+            style: TextStyle(fontSize: 14, color: Colors.white, height: 1.4),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
               ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.support_agent,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Get Direct Support',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Our support team is ready to help',
+            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          _buildContactRow(Icons.email, 'civiclink.official@gmail.com'),
+          _buildContactRow(Icons.access_time, 'Response: 24-48 hours'),
+        ],
+      ),
+    );
+  }
 
-              const SizedBox(height: 20),
+  Widget _buildContactRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4F46E5).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(icon, color: const Color(0xFF4F46E5), size: 16),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF374151),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              // To Field (Read-only)
+  Widget _buildQuickHelpCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: ModernTheme.primaryBlue.withOpacity(0.1),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                  ),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: ModernTheme.primaryBlue.withOpacity(0.3),
-                  ),
                 ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.person,
-                      color: ModernTheme.primaryBlue,
-                      size: 20,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'To: ',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: ModernTheme.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      'CivicLink Support Team',
-                      style: TextStyle(
-                        color: ModernTheme.primaryBlue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                child: const Icon(
+                  Icons.help_outline,
+                  color: Colors.white,
+                  size: 18,
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              // Subject Field
+              const SizedBox(width: 12),
               const Text(
-                'Subject *',
+                'Common Questions',
                 style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: ModernTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _subjectController,
-                decoration: InputDecoration(
-                  hintText: 'Brief description of your issue...',
-                  prefixIcon: const Icon(
-                    Icons.subject,
-                    color: ModernTheme.primaryBlue,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: ModernTheme.primaryBlue.withOpacity(0.3),
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: ModernTheme.primaryBlue.withOpacity(0.3),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: ModernTheme.primaryBlue,
-                      width: 2,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Message Field
-              const Text(
-                'Message *',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: ModernTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _messageController,
-                maxLines: 8,
-                decoration: InputDecoration(
-                  hintText: '''Please describe your issue in detail...
-
-Include:
-• What you were trying to do
-• What happened instead
-• Any error messages you saw
-• Steps to reproduce the issue
-• Your device information (if relevant)
-
-The more details you provide, the better we can help you!''',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: ModernTheme.primaryBlue.withOpacity(0.3),
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: ModernTheme.primaryBlue.withOpacity(0.3),
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: ModernTheme.primaryBlue,
-                      width: 2,
-                    ),
-                  ),
-                  alignLabelWithHint: true,
-                  contentPadding: const EdgeInsets.all(16),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Priority Selection
-              const Text(
-                'Priority Level',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: ModernTheme.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildPriorityChip(
-                    'Low',
-                    ModernTheme.success,
-                    Icons.low_priority,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildPriorityChip(
-                    'Medium',
-                    ModernTheme.warning,
-                    Icons.priority_high,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildPriorityChip(
-                    'High',
-                    ModernTheme.error,
-                    Icons.report_problem,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Send Button
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _sendSupportMessage,
-                  icon:
-                      _isLoading
-                          ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                          : const Icon(Icons.send, size: 20),
-                  label: Text(
-                    _isLoading ? 'Sending...' : 'Send Message',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ModernTheme.primaryBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1F2937),
                 ),
               ),
             ],
           ),
-        ),
-
-        const SizedBox(height: 24),
-
-        // Quick Tips
-        _buildGuideCard(
-          title: 'Tips for Better Support',
-          content: '''
-🎯 Be specific: Describe exactly what you were doing when the issue occurred.
-
-📱 Include device info: Mention your device type and app version if relevant.
-
-📷 Screenshots help: If you can't attach images here, describe what you see.
-
-🕐 Check response: We typically respond within 24-48 hours during business days.
-
-🚨 Urgent issues: For safety emergencies, contact local authorities first.
-          ''',
-          icon: Icons.lightbulb,
-        ),
-
-        // Contact Info
-        _buildGuideCard(
-          title: 'Alternative Contact Methods',
-          content: '''
-📧 Direct Email: civiclink.official@gmail.com
-📞 Phone Support: Available during business hours
-🌐 Website: Visit our help center for FAQs
-
-Business Hours:
-Monday - Friday: 9:00 AM - 6:00 PM
-Saturday: 10:00 AM - 4:00 PM
-Sunday: Closed
-          ''',
-          icon: Icons.contact_support,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPriorityChip(String priority, Color color, IconData icon) {
-    final isSelected = _selectedPriority == priority;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedPriority = priority),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? color : color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color, width: isSelected ? 2 : 1),
+          const SizedBox(height: 12),
+          _buildQuestionItem(
+            'How do I report an urgent issue?',
+            'Select "Critical" or "High" priority when creating your report.',
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: isSelected ? Colors.white : color),
-              const SizedBox(width: 6),
-              Text(
-                priority,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
-            ],
+          _buildQuestionItem(
+            'Why can\'t I see my issue on the map?',
+            'New issues may take a few minutes to appear.',
           ),
-        ),
+          _buildQuestionItem(
+            'How do I get faster responses?',
+            'Include clear photos and detailed descriptions.',
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _sendSupportMessage() async {
-    // Validate form
-    if (_subjectController.text.trim().isEmpty) {
-      _showErrorSnackBar('Please enter a subject for your message');
-      return;
-    }
-
-    if (_messageController.text.trim().isEmpty) {
-      _showErrorSnackBar('Please enter your message');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // Simulate sending email (replace with actual email service)
-      await _simulateEmailSending();
-
-      // Clear form
-      _subjectController.clear();
-      _messageController.clear();
-      setState(() => _selectedPriority = 'Medium');
-
-      // Show success message
-      _showSuccessSnackBar(
-        'Message sent successfully! We\'ll respond within 24-48 hours.',
-      );
-    } catch (e) {
-      _showErrorSnackBar('Failed to send message. Please try again.');
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _simulateEmailSending() async {
-    // This simulates the email sending process
-    // In a real app, you would integrate with an email service like:
-    // - EmailJS
-    // - SendGrid
-    // - Firebase Functions with Nodemailer
-    // - Your own backend API
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    // Here you would make the actual API call to send the email
-    print('Sending support email:');
-    print('To: civiclink.official@gmail.com');
-    print('Subject: ${_subjectController.text}');
-    print('Priority: $_selectedPriority');
-    print('Message: ${_messageController.text}');
-  }
-
-  void _copyEmail() {
-    // This method is no longer needed
-  }
-
-  void _showEmailDialog() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+  Widget _buildQuestionItem(String question, String answer) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            question,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1F2937),
             ),
-            title: const Row(
-              children: [
-                Icon(Icons.email, color: ModernTheme.primaryBlue),
-                SizedBox(width: 12),
-                Text('Contact Support'),
-              ],
-            ),
-            content: const Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Send an email to our support team:'),
-                SizedBox(height: 12),
-                SelectableText(
-                  'civiclink.official@gmail.com',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: ModernTheme.primaryBlue,
-                    fontSize: 16,
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Include your issue description and any relevant screenshots for faster assistance.',
-                  style: TextStyle(
-                    color: ModernTheme.textSecondary,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _copyEmail();
-                },
-                icon: const Icon(Icons.copy, size: 18),
-                label: const Text('Copy Email'),
-              ),
-            ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            answer,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF6B7280),
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1082,10 +1149,10 @@ Sunday: Closed
           children: [
             const Icon(Icons.check_circle, color: Colors.white),
             const SizedBox(width: 12),
-            Text(message),
+            Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: ModernTheme.success,
+        backgroundColor: const Color(0xFF10B981),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
@@ -1100,62 +1167,13 @@ Sunday: Closed
           children: [
             const Icon(Icons.error_outline, color: Colors.white),
             const SizedBox(width: 12),
-            Text(message),
+            Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: ModernTheme.error,
+        backgroundColor: const Color(0xFFEF4444),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-}
-
-// Helper widget for ModernCard (if not already defined)
-class ModernCard extends StatelessWidget {
-  final Widget child;
-  final Color? color;
-  final VoidCallback? onTap;
-  final EdgeInsetsGeometry? padding;
-  final BorderRadius? borderRadius;
-  final bool elevated;
-
-  const ModernCard({
-    Key? key,
-    required this.child,
-    this.color,
-    this.onTap,
-    this.padding = const EdgeInsets.all(20),
-    this.borderRadius,
-    this.elevated = false,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color ?? ModernTheme.surface,
-        borderRadius: borderRadius ?? BorderRadius.circular(16),
-        boxShadow:
-            elevated
-                ? [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ]
-                : ModernTheme.cardShadow,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: borderRadius ?? BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: borderRadius ?? BorderRadius.circular(16),
-          child: Padding(padding: padding!, child: child),
-        ),
       ),
     );
   }

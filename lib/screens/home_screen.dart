@@ -12,12 +12,9 @@ import '../services/auth_service.dart';
 import '../services/issue_service.dart';
 import '../models/user_model.dart';
 import '../models/issue_model.dart';
-import '../theme/modern_theme.dart'
-    hide ModernStatusChip, GradientButton, ModernCard;
+import '../theme/modern_theme.dart';
 import 'report_issue_screen.dart';
 import 'issue_detail_screen.dart';
-import '../widgets/modern_card.dart';
-import '../widgets/gradient_button.dart';
 
 class HomeScreen extends StatefulWidget {
   @override

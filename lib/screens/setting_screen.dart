@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
 import '../services/settings_service.dart';
 import '../models/user_model.dart';
-import '../theme/modern_theme.dart' hide ModernCard;
+import '../theme/modern_theme.dart';
 import 'citizen_help_support_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
