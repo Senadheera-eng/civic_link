@@ -1,7 +1,8 @@
-// screens/settings_screen.dart (FINAL FIXED VERSION)
+// screens/settings_screen.dart (UPDATED VERSION)
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import '../services/settings_service.dart';
 import '../models/user_model.dart';
@@ -30,7 +31,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _emailNotifications = true;
   bool _pushNotifications = true;
   bool _locationEnabled = false;
-  bool _biometricEnabled = false;
   String _selectedLanguage = 'English';
   bool _isDarkMode = false;
   bool _soundEnabled = true;
@@ -109,7 +109,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         _emailNotifications = prefs.getBool('email_notifications') ?? true;
         _pushNotifications = prefs.getBool('push_notifications') ?? true;
         _locationEnabled = prefs.getBool('location_enabled') ?? false;
-        _biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
 
         _isLoading = false;
       });
@@ -201,13 +200,175 @@ class _SettingsScreenState extends State<SettingsScreen>
       // Save privacy settings to SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('location_enabled', _locationEnabled);
-      await prefs.setBool('biometric_enabled', _biometricEnabled);
 
       _showSuccessSnackBar('Privacy settings updated!');
     } catch (e) {
       _showErrorSnackBar('Failed to update privacy settings: $e');
     } finally {
       setState(() => _isUpdating = false);
+    }
+  }
+
+  // NEW: Contact Support functionality
+  void _showContactSupportDialog() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.support_agent,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text('Contact Support'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.primaryGradient.scale(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: ModernTheme.primaryBlue.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.email_outlined,
+                        size: 32,
+                        color: ModernTheme.primaryBlue,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Need help or have questions?',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: ModernTheme.textPrimary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Send us an email and we\'ll get back to you as soon as possible!',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: ModernTheme.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.email,
+                      color: ModernTheme.primaryBlue,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'civiclink.official@gmail.com',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: ModernTheme.primaryBlue,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.warning.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: ModernTheme.warning.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: ModernTheme.warning,
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'This will open your email app',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: ModernTheme.warning,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _openEmailApp();
+                },
+                icon: const Icon(Icons.email),
+                label: const Text('Email Us'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ModernTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Simple email app launcher
+  Future<void> _openEmailApp() async {
+    final String email = 'civiclink.official@gmail.com';
+
+    final Uri emailUri = Uri(scheme: 'mailto', path: email);
+
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+        _showSuccessSnackBar('Email app opened successfully!');
+      } else {
+        _showErrorSnackBar(
+          'Unable to open email app. Please email us manually at: $email',
+        );
+      }
+    } catch (e) {
+      _showErrorSnackBar(
+        'Unable to open email app. Please email us manually at: $email',
+      );
     }
   }
 
@@ -466,12 +627,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         subtitle: 'Update your account password',
         onTap: _changePassword,
       ),
-      _buildSettingsTile(
-        icon: Icons.email_outlined,
-        title: 'Email Preferences',
-        subtitle: 'Manage email settings',
-        onTap: _emailPreferences,
-      ),
+      // REMOVED: Email Preferences
     ]);
   }
 
@@ -558,28 +714,14 @@ class _SettingsScreenState extends State<SettingsScreen>
           await _updatePrivacySettings();
         },
       ),
-      _buildSwitchTile(
-        icon: Icons.fingerprint,
-        title: 'Biometric Authentication',
-        subtitle: 'Use fingerprint or face unlock',
-        value: _biometricEnabled,
-        onChanged: (value) async {
-          setState(() => _biometricEnabled = value);
-          await _updatePrivacySettings();
-        },
-      ),
+      // REMOVED: Biometric Authentication
       _buildSettingsTile(
         icon: Icons.security,
         title: 'Privacy Policy',
         subtitle: 'Read our privacy policy',
         onTap: _showPrivacyPolicy,
       ),
-      _buildSettingsTile(
-        icon: Icons.download_outlined,
-        title: 'Export Data',
-        subtitle: 'Download your account data',
-        onTap: _exportData,
-      ),
+      // REMOVED: Export Data
     ]);
   }
 
@@ -591,24 +733,20 @@ class _SettingsScreenState extends State<SettingsScreen>
         subtitle: 'Get help or contact support',
         onTap: _helpSupport,
       ),
+      // NEW: Contact Support via Email
+      _buildSettingsTile(
+        icon: Icons.email_outlined,
+        title: 'Contact Support',
+        subtitle: 'Send email to civiclink.official@gmail.com',
+        onTap: _showContactSupportDialog,
+      ),
       _buildSettingsTile(
         icon: Icons.info_outline,
         title: 'About CivicLink',
         subtitle: 'App version and information',
         onTap: _aboutApp,
       ),
-      _buildSettingsTile(
-        icon: Icons.rate_review_outlined,
-        title: 'Rate App',
-        subtitle: 'Rate CivicLink on app store',
-        onTap: _rateApp,
-      ),
-      _buildSettingsTile(
-        icon: Icons.share_outlined,
-        title: 'Share App',
-        subtitle: 'Share CivicLink with friends',
-        onTap: _shareApp,
-      ),
+      // REMOVED: Rate App and Share App
     ]);
   }
 
@@ -821,10 +959,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     _showChangePasswordDialog();
   }
 
-  void _emailPreferences() {
-    _showEmailPreferencesDialog();
-  }
-
   void _showPrivacyPolicy() {
     _showDialog(
       'Privacy Policy',
@@ -834,29 +968,6 @@ class _SettingsScreenState extends State<SettingsScreen>
           'Your privacy is important to us. We collect only the necessary '
           'information to provide our services and never share your personal '
           'data with third parties without your consent.',
-    );
-  }
-
-  void _exportData() {
-    _showDialog(
-      'Export Data',
-      'Your data export will be prepared and sent to your email address. '
-          'This may take a few minutes to process.\n\n'
-          'The export will include:\n'
-          '• Profile information\n'
-          '• Reported issues\n'
-          '• App settings\n'
-          '• Activity history',
-      showActions: true,
-      confirmText: 'Export',
-      onConfirm: () async {
-        try {
-          final settings = _settingsService.exportSettings();
-          _showSuccessSnackBar('Data export initiated! Check your email.');
-        } catch (e) {
-          _showErrorSnackBar('Failed to export data: $e');
-        }
-      },
     );
   }
 
@@ -873,39 +984,10 @@ class _SettingsScreenState extends State<SettingsScreen>
           '• Location-based mapping\n'
           '• Real-time notifications\n'
           '• Admin dashboard\n\n'
+          '📧 Support: civiclink.official@gmail.com\n'
+          '🌐 Website: www.civiclink.com\n\n'
           '© 2025 CivicLink Team\n'
           'Made with ❤️ for better communities',
-    );
-  }
-
-  void _rateApp() {
-    _showDialog(
-      'Rate CivicLink',
-      '⭐ Enjoying CivicLink?\n\n'
-          'Your feedback helps us improve and reach more communities! '
-          'Would you like to rate us on the app store?\n\n'
-          'It only takes a minute and really helps other users discover our app.',
-      showActions: true,
-      confirmText: 'Rate Now',
-      onConfirm: () {
-        _showSuccessSnackBar('Redirecting to app store...');
-      },
-    );
-  }
-
-  void _shareApp() {
-    _showDialog(
-      'Share CivicLink',
-      '📢 Help spread the word!\n\n'
-          'Share CivicLink with your friends and family to help build '
-          'stronger communities together.\n\n'
-          '\"Check out CivicLink - an amazing app for reporting and tracking '
-          'community issues! Download it now and help make our neighborhood better.\"',
-      showActions: true,
-      confirmText: 'Share',
-      onConfirm: () {
-        _showSuccessSnackBar('Opening share dialog...');
-      },
     );
   }
 
@@ -950,7 +1032,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       onConfirm: () {
         _showDialog(
           'Account Deletion',
-          'Account deletion is a permanent action. To proceed, please contact our support team at support@civiclink.com with your deletion request.\n\n'
+          'Account deletion is a permanent action. To proceed, please contact our support team at civiclink.official@gmail.com with your deletion request.\n\n'
               'We\'ll process your request within 48 hours and send you a confirmation email.',
         );
       },
@@ -1076,68 +1158,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                 child: const Text('Change Password'),
               ),
             ],
-          ),
-    );
-  }
-
-  void _showEmailPreferencesDialog() {
-    bool issueUpdates = true;
-    bool weeklyDigest = false;
-    bool promotionalEmails = false;
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setState) => AlertDialog(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  title: const Text('Email Preferences'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SwitchListTile(
-                        title: const Text('Issue Updates'),
-                        subtitle: const Text(
-                          'Get notified about your reported issues',
-                        ),
-                        value: issueUpdates,
-                        onChanged:
-                            (value) => setState(() => issueUpdates = value),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Weekly Digest'),
-                        subtitle: const Text('Summary of community activities'),
-                        value: weeklyDigest,
-                        onChanged:
-                            (value) => setState(() => weeklyDigest = value),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Promotional Emails'),
-                        subtitle: const Text('News and feature updates'),
-                        value: promotionalEmails,
-                        onChanged:
-                            (value) =>
-                                setState(() => promotionalEmails = value),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _showSuccessSnackBar('Email preferences updated!');
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ],
-                ),
           ),
     );
   }
