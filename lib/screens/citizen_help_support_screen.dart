@@ -1,16 +1,13 @@
-// screens/citizen_help_support_screen.dart (FIXED VERSION)
+// screens/citizen_help_support_screen.dart (ENHANCED PROFESSIONAL VERSION)
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/modern_theme.dart';
-import '../widgets/modern_card.dart';
-import '../widgets/gradient_button.dart';
 
 class CitizenHelpSupportScreen extends StatefulWidget {
   const CitizenHelpSupportScreen({Key? key}) : super(key: key);
 
   @override
-  State<CitizenHelpSupportScreen> createState() => _CitizenHelpSupportScreenState();
+  State<CitizenHelpSupportScreen> createState() =>
+      _CitizenHelpSupportScreenState();
 }
 
 class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
@@ -19,19 +16,11 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
-  // Email form controllers
-  final _fromEmailController = TextEditingController();
-  final _subjectController = TextEditingController();
-  final _messageController = TextEditingController();
-  bool _isComposing = false;
-  bool _isSending = false;
-
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _initAnimations();
-    _loadUserEmail();
   }
 
   void _initAnimations() {
@@ -46,92 +35,35 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     _fadeController.forward();
   }
 
-  void _loadUserEmail() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      _fromEmailController.text = user.email ?? '';
-    }
-  }
-
   @override
   void dispose() {
     _tabController.dispose();
     _fadeController.dispose();
-    _fromEmailController.dispose();
-    _subjectController.dispose();
-    _messageController.dispose();
     super.dispose();
-  }
-
-  Future<void> _sendEmail() async {
-    final fromEmail = _fromEmailController.text.trim();
-    final subject = _subjectController.text.trim();
-    final message = _messageController.text.trim();
-
-    if (fromEmail.isEmpty || subject.isEmpty || message.isEmpty) {
-      _showErrorSnackBar('Please fill in all fields');
-      return;
-    }
-
-    if (!_isValidEmail(fromEmail)) {
-      _showErrorSnackBar('Please enter a valid email address');
-      return;
-    }
-
-    setState(() => _isSending = true);
-
-    try {
-      // Send email to Firestore for admin processing
-      await FirebaseFirestore.instance.collection('support_emails').add({
-        'from': fromEmail,
-        'to': 'civiclink.official@gmail.com',
-        'subject': subject,
-        'message': message,
-        'timestamp': FieldValue.serverTimestamp(),
-        'status': 'pending',
-        'userId': FirebaseAuth.instance.currentUser?.uid,
-      });
-
-      _showSuccessSnackBar('Email sent successfully! We will respond within 24-48 hours.');
-      
-      // Clear the form
-      _subjectController.clear();
-      _messageController.clear();
-      setState(() => _isComposing = false);
-      
-    } catch (e) {
-      _showErrorSnackBar('Failed to send email. Please try again.');
-    } finally {
-      setState(() => _isSending = false);
-    }
-  }
-
-  bool _isValidEmail(String email) {
-    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnimation,
           child: Column(
             children: [
               _buildProfessionalHeader(),
-              if (!_isComposing) _buildColorfulTabBar(),
+              _buildEnhancedTabBar(),
               Expanded(
-                child: _isComposing 
-                  ? _buildSimpleEmailInterface()
-                  : TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildGettingStartedTab(),
-                        _buildFeaturesGuideTab(),
-                        _buildEmailSupportTab(),
-                      ],
-                    ),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildGettingStartedTab(),
+                    _buildReportingGuideTab(),
+                    _buildTrackingGuideTab(),
+                    _buildMapGuideTab(),
+                    _buildFAQTab(),
+                  ],
+                ),
               ),
             ],
           ),
@@ -143,15 +75,18 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
   Widget _buildProfessionalHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 25),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF667EEA),
-            Color(0xFF764BA2),
+            Color(0xFF0F172A), // Slate 900
+            Color(0xFF1E293B), // Slate 800
+            Color(0xFF334155), // Slate 700
+            Color(0xFF475569), // Slate 600
           ],
+          stops: [0.0, 0.3, 0.7, 1.0],
         ),
       ),
       child: Column(
@@ -160,8 +95,12 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 1,
+                  ),
                 ),
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -169,45 +108,70 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                 ),
               ),
               const Spacer(),
-              const Text(
-                'Help & Support',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
+              const Column(
+                children: [
+                  Text(
+                    'Help & Support',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  Text(
+                    'Your Complete Guide to CivicLink',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
               const Spacer(),
               const SizedBox(width: 48),
             ],
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 24),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: const Column(
               children: [
-                Icon(Icons.support_agent, size: 32, color: Colors.white),
-                SizedBox(height: 8),
+                Icon(Icons.help_center_rounded, size: 48, color: Colors.white),
+                SizedBox(height: 16),
                 Text(
-                  'We\'re Here to Help!',
+                  'Master CivicLink',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
-                SizedBox(height: 4),
+                SizedBox(height: 8),
                 Text(
-                  'Get the most out of CivicLink',
+                  'Learn how to effectively report, track, and manage community issues with our comprehensive guide',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 14,
                     color: Colors.white70,
+                    height: 1.4,
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -217,17 +181,17 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     );
   }
 
-  Widget _buildColorfulTabBar() {
+  Widget _buildEnhancedTabBar() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            blurRadius: 25,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -235,49 +199,79 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
         controller: _tabController,
         indicator: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6366F1).withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         indicatorPadding: const EdgeInsets.all(4),
         labelColor: Colors.white,
-        unselectedLabelColor: const Color(0xFF6B7280),
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+        unselectedLabelColor: const Color(0xFF64748B),
+        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 10),
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 10,
+        ),
         tabs: const [
           Tab(
-            height: 44,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+            height: 50,
+            child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.rocket_launch, size: 16),
-                SizedBox(width: 4),
-                Flexible(child: Text('Getting Started', overflow: TextOverflow.ellipsis)),
+                Icon(Icons.rocket_launch_rounded, size: 18),
+                SizedBox(height: 2),
+                Text('Getting Started'),
               ],
             ),
           ),
           Tab(
-            height: 44,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+            height: 50,
+            child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.explore, size: 16),
-                SizedBox(width: 4),
-                Flexible(child: Text('Features', overflow: TextOverflow.ellipsis)),
+                Icon(Icons.report_gmailerrorred_rounded, size: 18),
+                SizedBox(height: 2),
+                Text('Reporting'),
               ],
             ),
           ),
           Tab(
-            height: 44,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+            height: 50,
+            child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.email, size: 16),
-                SizedBox(width: 4),
-                Flexible(child: Text('Email Support', overflow: TextOverflow.ellipsis)),
+                Icon(Icons.track_changes_rounded, size: 18),
+                SizedBox(height: 2),
+                Text('Tracking'),
+              ],
+            ),
+          ),
+          Tab(
+            height: 50,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.map_rounded, size: 18),
+                SizedBox(height: 2),
+                Text('Map Guide'),
+              ],
+            ),
+          ),
+          Tab(
+            height: 50,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.quiz_rounded, size: 18),
+                SizedBox(height: 2),
+                Text('FAQ'),
               ],
             ),
           ),
@@ -291,551 +285,248 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          _buildColorfulStepCard(
-            1,
-            'Create Your First Report',
-            'Tap the "Report Issue" button to get started',
-            Icons.add_circle,
-            const LinearGradient(colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)]),
-            [
-              'Choose a clear, descriptive title',
-              'Select the correct category',
-              'Add photos for better understanding',
-              'Your location is detected automatically',
-            ],
-          ),
-          _buildColorfulStepCard(
-            2,
-            'Track Your Progress',
-            'Monitor all your reports in "My Issues"',
-            Icons.timeline,
-            const LinearGradient(colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)]),
-            [
-              'See real-time status updates',
-              'Get notifications when things change',
-              'Send reminders for pending issues',
-              'View detailed response from officials',
-            ],
-          ),
-          _buildColorfulStepCard(
-            3,
-            'Explore Community Issues',
-            'Check the interactive map for nearby issues',
-            Icons.map,
-            const LinearGradient(colors: [Color(0xFF667EEA), Color(0xFF764BA2)]),
-            [
-              'Filter by distance and category',
-              'Tap markers to see issue details',
-              'Find issues in your neighborhood',
-              'Switch between map and list views',
-            ],
+          _buildWelcomeCard(),
+          const SizedBox(height: 20),
+          _buildStepByStepGuide(),
+          const SizedBox(height: 20),
+          _buildQuickTipsCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportingGuideTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildReportingOverview(),
+          const SizedBox(height: 16),
+          _buildCategoriesGuide(),
+          const SizedBox(height: 16),
+          _buildPriorityGuide(),
+          const SizedBox(height: 16),
+          _buildBestPracticesCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackingGuideTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildTrackingOverview(),
+          const SizedBox(height: 16),
+          _buildStatusGuide(),
+          const SizedBox(height: 16),
+          _buildNotificationGuide(),
+          const SizedBox(height: 16),
+          _buildTrackingTipsCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapGuideTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildMapOverview(),
+          const SizedBox(height: 16),
+          _buildMapFeaturesCard(),
+          const SizedBox(height: 16),
+          _buildFilterGuide(),
+          const SizedBox(height: 16),
+          _buildMapTipsCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFAQTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildFAQSection(
+            'General Questions',
+            _getGeneralFAQs(),
+            const Color(0xFF3B82F6),
           ),
           const SizedBox(height: 16),
-          _buildSuccessTipsCard(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeaturesGuideTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _buildFeatureCard(
+          _buildFAQSection(
             'Reporting Issues',
-            'Master effective issue reporting',
-            Icons.report_gmailerrorred,
-            const LinearGradient(colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)]),
-            [
-              'Choose descriptive titles',
-              'Select accurate categories',
-              'Include multiple photos',
-              'Write clear descriptions',
-              'Set appropriate priority levels',
-            ],
+            _getReportingFAQs(),
+            const Color(0xFF10B981),
           ),
-          _buildFeatureCard(
-            'Issue Tracking',
-            'Stay informed about progress',
-            Icons.track_changes,
-            const LinearGradient(colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)]),
-            [
-              'Check "My Issues" regularly',
-              'Understand different statuses',
-              'Read official responses',
-              'Send polite reminders',
-            ],
+          const SizedBox(height: 16),
+          _buildFAQSection(
+            'Technical Support',
+            _getTechnicalFAQs(),
+            const Color(0xFFF59E0B),
           ),
-          _buildFeatureCard(
-            'Community Map',
-            'Explore community awareness',
-            Icons.public,
-            const LinearGradient(colors: [Color(0xFF667EEA), Color(0xFF764BA2)]),
-            [
-              'Use filters for specific issues',
-              'Adjust radius for nearby problems',
-              'Tap custom locations to explore',
-              'Report similar issues you notice',
-            ],
-          ),
+          const SizedBox(height: 16),
+          _buildContactCard(),
         ],
       ),
     );
   }
 
-  Widget _buildEmailSupportTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Contact Information Card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                // Email Icon and Address
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4F46E5).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.email,
-                        color: Color(0xFF4F46E5),
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'civiclink.official@gmail.com',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Color(0xFF374151),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Response Time
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF059669).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.access_time,
-                        color: Color(0xFF059669),
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Response: 24-48 hours',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Color(0xFF374151),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 20),
-          
-          // Common Questions Section
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Section Header
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B6B).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.help_outline,
-                        color: Color(0xFFFF6B6B),
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Common Questions',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1F2937),
-                      ),
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Question 1
-                _buildSimpleQuestionItem(
-                  'How do I report an urgent issue?',
-                  'Select "Critical" or "High" priority when creating your report.',
-                ),
-                
-                const SizedBox(height: 12),
-                
-                // Question 2
-                _buildSimpleQuestionItem(
-                  'Why can\'t I see my issue on the map?',
-                  'New issues may take a few minutes to appear.',
-                ),
-                
-                const SizedBox(height: 12),
-                
-                // Question 3
-                _buildSimpleQuestionItem(
-                  'How do I get faster responses?',
-                  'Include clear photos and detailed descriptions.',
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 30),
-          
-          // Compose Email Button
-          Container(
-            width: double.infinity,
-            height: 56,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF4F46E5).withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                onTap: () => setState(() => _isComposing = true),
-                borderRadius: BorderRadius.circular(16),
-                child: const Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.email, color: Colors.white, size: 24),
-                      SizedBox(width: 12),
-                      Text(
-                        'Compose Email',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSimpleEmailInterface() {
+  Widget _buildWelcomeCard() {
     return Container(
-      color: const Color(0xFF2D3748),
-      child: Column(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFA855F7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: const Column(
         children: [
-          // Email header bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF4299E1),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3182CE),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.send, color: Colors.white, size: 14),
-                      const SizedBox(width: 4),
-                      const Text(
-                        'Send',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.arrow_drop_down, color: Colors.white, size: 14),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => setState(() => _isComposing = false),
-                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                ),
-              ],
+          Icon(Icons.waving_hand_rounded, size: 52, color: Colors.white),
+          SizedBox(height: 20),
+          Text(
+            'Welcome to CivicLink!',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              letterSpacing: -0.5,
             ),
           ),
-          
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  // From field
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 1),
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF4A5568),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(
-                          width: 50,
-                          child: Text(
-                            'From:',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _fromEmailController,
-                            style: const TextStyle(color: Colors.white, fontSize: 14),
-                            decoration: const InputDecoration(
-                              hintText: 'your.email@example.com',
-                              hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const Icon(Icons.arrow_drop_down, color: Colors.white70, size: 18),
-                      ],
-                    ),
-                  ),
-                  
-                  // To field
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 1),
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF4A5568),
-                    ),
-                    child: const Row(
-                      children: [
-                        SizedBox(
-                          width: 50,
-                          child: Text(
-                            'To',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          'civiclink.official@gmail.com',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                        Spacer(),
-                        Text(
-                          'Cc',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'Bcc',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  
-                  // Subject field
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF4A5568),
-                    ),
-                    child: TextFormField(
-                      controller: _subjectController,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                      decoration: const InputDecoration(
-                        hintText: 'Add a subject',
-                        hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  
-                  // Message body
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF4A5568),
-                        borderRadius: BorderRadius.all(Radius.circular(4)),
-                      ),
-                      child: TextFormField(
-                        controller: _messageController,
-                        style: const TextStyle(color: Colors.white, height: 1.4, fontSize: 14),
-                        maxLines: null,
-                        expands: true,
-                        textAlignVertical: TextAlignVertical.top,
-                        decoration: const InputDecoration(
-                          hintText: 'Compose your message here...\n\nPlease describe your issue or question in detail.',
-                          hintStyle: TextStyle(color: Colors.white54, height: 1.4, fontSize: 14),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                  ),
-                  
-                  // Send button
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    width: double.infinity,
-                    height: 44,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSending ? null : _sendEmail,
-                      icon: _isSending 
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.send, size: 16),
-                      label: Text(_isSending ? 'Sending...' : 'Send Email'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4299E1),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          SizedBox(height: 12),
+          Text(
+            'Your gateway to making a positive impact in your community. Report issues, track progress, and help build a better neighborhood together.',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.white,
+              height: 1.5,
+              fontWeight: FontWeight.w400,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildColorfulStepCard(
+  Widget _buildStepByStepGuide() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Quick Start Guide',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1E293B),
+          ),
+        ),
+        const SizedBox(height: 20),
+        _buildStepCard(
+          1,
+          'Report an Issue',
+          'Tap the "Report Issue" button to start',
+          Icons.add_circle_outline_rounded,
+          const Color(0xFFEF4444),
+          [
+            'Choose a descriptive title',
+            'Select the right category',
+            'Add clear photos',
+            'Provide detailed description',
+            'Set appropriate priority level',
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildStepCard(
+          2,
+          'Track Progress',
+          'Monitor your reports in "My Issues"',
+          Icons.track_changes_rounded,
+          const Color(0xFF3B82F6),
+          [
+            'Check status updates regularly',
+            'Read official responses',
+            'Get push notifications',
+            'View progress timeline',
+            'Send gentle reminders if needed',
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildStepCard(
+          3,
+          'Explore Community',
+          'Use the map to see nearby issues',
+          Icons.explore_rounded,
+          const Color(0xFF10B981),
+          [
+            'Filter by category and distance',
+            'Tap markers for details',
+            'Report similar issues you notice',
+            'Stay informed about your area',
+            'Engage with community reports',
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepCard(
     int step,
     String title,
-    String description,
+    String subtitle,
     IconData icon,
-    LinearGradient gradient,
+    Color color,
     List<String> points,
   ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: color.withOpacity(0.15),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: gradient,
+              gradient: LinearGradient(
+                colors: [color, color.withOpacity(0.8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Center(
                     child: Text(
@@ -848,7 +539,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -856,166 +547,66 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                       Text(
                         title,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        description,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(icon, color: Colors.white, size: 24),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: points.map((point) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 4,
-                      height: 4,
-                      margin: const EdgeInsets.only(top: 6, right: 10),
-                      decoration: BoxDecoration(
-                        gradient: gradient,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        point,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF374151),
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureCard(
-    String title,
-    String subtitle,
-    IconData icon,
-    LinearGradient gradient,
-    List<String> features,
-  ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: gradient,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.9),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.white70,
                         ),
                       ),
                     ],
                   ),
                 ),
+                Icon(icon, color: Colors.white, size: 28),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Column(
-              children: features.map((feature) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        gradient: gradient,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        feature,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF374151),
-                          height: 1.3,
+              children:
+                  points
+                      .map(
+                        (point) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                margin: const EdgeInsets.only(
+                                  top: 6,
+                                  right: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [color, color.withOpacity(0.7)],
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  point,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF374151),
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-              )).toList(),
+                      )
+                      .toList(),
             ),
           ),
         ],
@@ -1023,42 +614,40 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     );
   }
 
-  Widget _buildSuccessTipsCard() {
+  Widget _buildQuickTipsCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF10B981), Color(0xFF059669)],
+          colors: [Color(0xFF059669), Color(0xFF10B981), Color(0xFF34D399)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF10B981).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: const Color(0xFF10B981).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: const Column(
         children: [
-          Icon(Icons.emoji_events, color: Colors.white, size: 32),
-          SizedBox(height: 12),
+          Icon(Icons.lightbulb_rounded, color: Colors.white, size: 36),
+          SizedBox(height: 16),
           Text(
-            'Success Tips',
+            'Pro Tips for Better Results',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
-          SizedBox(height: 8),
+          SizedBox(height: 12),
           Text(
-            'Follow these tips to get the best results from your reports!',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white,
-              height: 1.4,
-            ),
+            'Be specific in your descriptions, include multiple photos from different angles, and provide your contact information for faster resolution of your reports.',
+            style: TextStyle(fontSize: 15, color: Colors.white, height: 1.5),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1066,106 +655,261 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     );
   }
 
-  Widget _buildSimpleQuestionItem(String question, String answer) {
+  Widget _buildReportingOverview() {
     return Container(
-      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFDC2626), Color(0xFFEF4444), Color(0xFFF87171)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFEF4444).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.report_gmailerrorred_rounded,
+            size: 40,
+            color: Colors.white,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Effective Issue Reporting',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Learn how to create detailed, actionable reports that get results from local authorities',
+            style: TextStyle(fontSize: 15, color: Colors.white, height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoriesGuide() {
+    final categories = [
+      {
+        'name': 'Road & Transportation',
+        'icon': Icons.construction_rounded,
+        'color': const Color(0xFF3B82F6),
+      },
+      {
+        'name': 'Water & Sewerage',
+        'icon': Icons.water_drop_rounded,
+        'color': const Color(0xFF06B6D4),
+      },
+      {
+        'name': 'Electricity',
+        'icon': Icons.electrical_services_rounded,
+        'color': const Color(0xFFF59E0B),
+      },
+      {
+        'name': 'Public Safety',
+        'icon': Icons.security_rounded,
+        'color': const Color(0xFFEF4444),
+      },
+      {
+        'name': 'Waste Management',
+        'icon': Icons.delete_rounded,
+        'color': const Color(0xFF10B981),
+      },
+      {
+        'name': 'Parks & Recreation',
+        'icon': Icons.park_rounded,
+        'color': const Color(0xFF84CC16),
+      },
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            question,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1F2937),
+          const Text(
+            'Issue Categories',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1E293B),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            answer,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF6B7280),
-              height: 1.4,
+          const SizedBox(height: 20),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 3.2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
             ),
+            itemCount: categories.length,
+            itemBuilder: (context, index) {
+              final category = categories[index];
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      (category['color'] as Color).withOpacity(0.1),
+                      (category['color'] as Color).withOpacity(0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: (category['color'] as Color).withOpacity(0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      category['icon'] as IconData,
+                      color: category['color'] as Color,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        category['name'] as String,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: category['color'] as Color,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildContactCard() {
+  Widget _buildPriorityGuide() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.support_agent, color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 12),
           const Text(
-            'Get Direct Support',
+            'Priority Levels',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1F2937),
+              color: Color(0xFF1E293B),
             ),
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Our support team is ready to help',
-            style: TextStyle(
-              fontSize: 13,
-              color: Color(0xFF6B7280),
-            ),
-            textAlign: TextAlign.center,
+          const SizedBox(height: 20),
+          _buildPriorityItem(
+            'Critical',
+            'Immediate danger to public safety',
+            const Color(0xFFDC2626),
           ),
-          const SizedBox(height: 16),
-          _buildContactRow(Icons.email, 'civiclink.official@gmail.com'),
-          _buildContactRow(Icons.access_time, 'Response: 24-48 hours'),
+          _buildPriorityItem(
+            'High',
+            'Significant impact on daily life',
+            const Color(0xFFF59E0B),
+          ),
+          _buildPriorityItem(
+            'Medium',
+            'Noticeable but not urgent',
+            const Color(0xFF3B82F6),
+          ),
+          _buildPriorityItem(
+            'Low',
+            'Minor issues for future attention',
+            const Color(0xFF10B981),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildContactRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+  Widget _buildPriorityItem(String level, String description, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+      ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4F46E5).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(icon, color: const Color(0xFF4F46E5), size: 16),
+            width: 16,
+            height: 16,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 10),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF374151),
-              fontWeight: FontWeight.w500,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  level,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1173,17 +917,215 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     );
   }
 
-  Widget _buildQuickHelpCard() {
+  Widget _buildBestPracticesCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF8B5CF6), Color(0xFFA855F7), Color(0xFFC084FC)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF8B5CF6).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.star_rounded, color: Colors.white, size: 28),
+              SizedBox(width: 12),
+              Text(
+                'Best Practices',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 20),
+          Text(
+            '• Use clear, specific titles that describe the exact issue\n• Include multiple photos from different angles\n• Provide exact location details and landmarks\n• Describe how the issue impacts the community\n• Choose appropriate priority level based on urgency\n• Include your contact information for follow-ups',
+            style: TextStyle(fontSize: 15, color: Colors.white, height: 1.7),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackingOverview() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1D4ED8), Color(0xFF3B82F6), Color(0xFF60A5FA)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF3B82F6).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.track_changes_rounded, size: 40, color: Colors.white),
+          SizedBox(height: 16),
+          Text(
+            'Track Your Issues',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Stay informed about the progress of your reported issues with real-time updates',
+            style: TextStyle(fontSize: 15, color: Colors.white, height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusGuide() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Status Meanings',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildStatusItem(
+            'Pending',
+            'Issue submitted, waiting for review',
+            const Color(0xFFF59E0B),
+            Icons.schedule_rounded,
+          ),
+          _buildStatusItem(
+            'In Progress',
+            'Officials are working on the issue',
+            const Color(0xFF3B82F6),
+            Icons.construction_rounded,
+          ),
+          _buildStatusItem(
+            'Resolved',
+            'Issue has been fixed',
+            const Color(0xFF10B981),
+            Icons.check_circle_rounded,
+          ),
+          _buildStatusItem(
+            'Rejected',
+            'Issue was not approved',
+            const Color(0xFFEF4444),
+            Icons.cancel_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusItem(
+    String status,
+    String description,
+    Color color,
+    IconData icon,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  status,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationGuide() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -1196,68 +1138,579 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                    colors: [Color(0xFF8B5CF6), Color(0xFFA855F7)],
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.help_outline, color: Colors.white, size: 18),
+                child: const Icon(
+                  Icons.notifications_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               const Text(
-                'Common Questions',
+                'Stay Updated',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1F2937),
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'You will receive notifications when:\n• Your issue status changes\n• Officials respond to your report\n• Additional information is needed\n• Issue resolution is completed\n• Similar issues are reported nearby',
+            style: TextStyle(
+              fontSize: 15,
+              color: Color(0xFF374151),
+              height: 1.7,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackingTipsCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0EA5E9), Color(0xFF06B6D4), Color(0xFF22D3EE)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF06B6D4).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.timeline_rounded, color: Colors.white, size: 36),
+          SizedBox(height: 16),
+          Text(
+            'Tracking Tips',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Check your reports regularly, engage with official responses, and don\'t hesitate to send polite reminders for long-pending issues.',
+            style: TextStyle(fontSize: 15, color: Colors.white, height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapOverview() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF059669), Color(0xFF10B981), Color(0xFF34D399)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10B981).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.map_rounded, size: 40, color: Colors.white),
+          SizedBox(height: 16),
+          Text(
+            'Explore Community Map',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Discover issues in your neighborhood and stay informed about community problems',
+            style: TextStyle(fontSize: 15, color: Colors.white, height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapFeaturesCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.map_rounded, color: Color(0xFF10B981), size: 24),
+              SizedBox(width: 12),
+              Text(
+                'Map Features',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 20),
+          Text(
+            '• View all community issues on an interactive map\n• Filter by category and distance radius\n• Tap markers to see detailed issue information\n• Switch between map and list view modes\n• Report similar issues you discover\n• Get directions to issue locations',
+            style: TextStyle(
+              fontSize: 15,
+              color: Color(0xFF374151),
+              height: 1.7,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterGuide() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF7C3AED), Color(0xFF8B5CF6)],
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.filter_list_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Using Filters',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _buildFilterItem(
+            'Category Filter',
+            'Show only specific types of issues',
+            Icons.category_rounded,
+          ),
+          _buildFilterItem(
+            'Distance Filter',
+            'Adjust radius around your location',
+            Icons.location_on_rounded,
+          ),
+          _buildFilterItem(
+            'Status Filter',
+            'Filter by resolution status',
+            Icons.filter_alt_rounded,
+          ),
+          _buildFilterItem(
+            'Date Filter',
+            'Show issues from specific time periods',
+            Icons.date_range_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterItem(String title, String description, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF8B5CF6).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: const Color(0xFF8B5CF6), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapTipsCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFD97706), Color(0xFFF59E0B), Color(0xFFFBBF24)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF59E0B).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.tips_and_updates_rounded, color: Colors.white, size: 36),
+          SizedBox(height: 16),
+          Text(
+            'Map Navigation Tips',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Use pinch to zoom, tap and drag to move around, and long press on empty areas to report new issues at specific locations.',
+            style: TextStyle(fontSize: 15, color: Colors.white, height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFAQSection(
+    String title,
+    List<Map<String, String>> faqs,
+    Color color,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [color, color.withOpacity(0.8)],
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.quiz_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ...faqs
+              .map(
+                (faq) => _buildFAQItem(faq['question']!, faq['answer']!, color),
+              )
+              .toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFAQItem(String question, String answer, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.08), color.withOpacity(0.04)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(top: 6, right: 12),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              Expanded(
+                child: Text(
+                  question,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _buildQuestionItem(
-            'How do I report an urgent issue?',
-            'Select "Critical" or "High" priority when creating your report.',
-          ),
-          _buildQuestionItem(
-            'Why can\'t I see my issue on the map?',
-            'New issues may take a few minutes to appear.',
-          ),
-          _buildQuestionItem(
-            'How do I get faster responses?',
-            'Include clear photos and detailed descriptions.',
+          Padding(
+            padding: const EdgeInsets.only(left: 20),
+            child: Text(
+              answer,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF64748B),
+                height: 1.5,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuestionItem(String question, String answer) {
+  List<Map<String, String>> _getGeneralFAQs() {
+    return [
+      {
+        'question': 'How do I create my first report?',
+        'answer':
+            'Tap the "Report Issue" button on the home screen, fill in the details with clear descriptions, add photos, and submit your report.',
+      },
+      {
+        'question': 'How long does it take to get a response?',
+        'answer':
+            'Response times vary by issue priority and type. Critical issues are typically addressed within 24-48 hours, while non-urgent issues may take 3-7 days.',
+      },
+      {
+        'question': 'Can I edit my report after submitting?',
+        'answer':
+            'Currently, reports cannot be edited after submission. However, you can add additional comments or photos through the issue details page.',
+      },
+      {
+        'question': 'Is my personal information kept private?',
+        'answer':
+            'Yes, your personal information is protected. Only necessary details are shared with relevant authorities for issue resolution.',
+      },
+    ];
+  }
+
+  List<Map<String, String>> _getReportingFAQs() {
+    return [
+      {
+        'question': 'What makes a good issue report?',
+        'answer':
+            'Include clear photos, specific location details, comprehensive description, appropriate category selection, and accurate priority level.',
+      },
+      {
+        'question': 'How many photos can I attach?',
+        'answer':
+            'You can attach up to 5 photos per report. Make sure they clearly show the issue from different angles.',
+      },
+      {
+        'question': 'What if I don\'t know the exact category?',
+        'answer':
+            'Choose the closest category available. Officials can recategorize the issue if needed during the review process.',
+      },
+      {
+        'question': 'Can I report the same issue multiple times?',
+        'answer':
+            'Please check the map first to see if the issue has already been reported. Duplicate reports may be merged by administrators.',
+      },
+    ];
+  }
+
+  List<Map<String, String>> _getTechnicalFAQs() {
+    return [
+      {
+        'question': 'The app is running slowly, what can I do?',
+        'answer':
+            'Try restarting the app, check your internet connection, clear app cache, or restart your device. Contact support if issues persist.',
+      },
+      {
+        'question': 'I\'m not receiving notifications',
+        'answer':
+            'Check your phone\'s notification settings and ensure CivicLink is allowed to send notifications. Also verify your in-app notification preferences.',
+      },
+      {
+        'question': 'My photos won\'t upload',
+        'answer':
+            'Ensure you have a stable internet connection and sufficient storage space. Try reducing photo size or using a different network.',
+      },
+      {
+        'question': 'How do I reset my password?',
+        'answer':
+            'Use the "Forgot Password" link on the login screen to receive a password reset email, or contact support for assistance.',
+      },
+    ];
+  }
+
+  Widget _buildContactCard() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFA855F7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            question,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1F2937),
+          const Icon(
+            Icons.support_agent_rounded,
+            size: 44,
+            color: Colors.white,
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Need More Help?',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            answer,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-              height: 1.3,
+          const SizedBox(height: 12),
+          const Text(
+            'Our support team is here to assist you with any questions or issues you may have.',
+            style: TextStyle(fontSize: 15, color: Colors.white, height: 1.5),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              children: [
+                _buildContactRow(
+                  Icons.email_rounded,
+                  'civiclink.official@gmail.com',
+                ),
+                const SizedBox(height: 12),
+                _buildContactRow(Icons.phone_rounded, '+1 (555) 123-4567'),
+                const SizedBox(height: 12),
+                _buildContactRow(
+                  Icons.access_time_rounded,
+                  'Monday - Friday: 9:00 AM - 6:00 PM',
+                ),
+                const SizedBox(height: 12),
+                _buildContactRow(
+                  Icons.weekend_rounded,
+                  'Saturday: 10:00 AM - 4:00 PM',
+                ),
+              ],
             ),
           ),
         ],
@@ -1265,39 +1718,22 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
     );
   }
 
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
+  Widget _buildContactRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, color: Colors.white, size: 18),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
-        backgroundColor: const Color(0xFF10B981),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: const Color(0xFFEF4444),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
+      ],
     );
   }
 }
