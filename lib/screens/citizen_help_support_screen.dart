@@ -10,8 +10,7 @@ class CitizenHelpSupportScreen extends StatefulWidget {
   const CitizenHelpSupportScreen({Key? key}) : super(key: key);
 
   @override
-  State<CitizenHelpSupportScreen> createState() =>
-      _CitizenHelpSupportScreenState();
+  State<CitizenHelpSupportScreen> createState() => _CitizenHelpSupportScreenState();
 }
 
 class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
@@ -93,14 +92,13 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
         'userId': FirebaseAuth.instance.currentUser?.uid,
       });
 
-      _showSuccessSnackBar(
-        'Email sent successfully! We will respond within 24-48 hours.',
-      );
-
+      _showSuccessSnackBar('Email sent successfully! We will respond within 24-48 hours.');
+      
       // Clear the form
       _subjectController.clear();
       _messageController.clear();
       setState(() => _isComposing = false);
+      
     } catch (e) {
       _showErrorSnackBar('Failed to send email. Please try again.');
     } finally {
@@ -124,17 +122,16 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
               _buildProfessionalHeader(),
               if (!_isComposing) _buildColorfulTabBar(),
               Expanded(
-                child:
-                    _isComposing
-                        ? _buildSimpleEmailInterface()
-                        : TabBarView(
-                          controller: _tabController,
-                          children: [
-                            _buildGettingStartedTab(),
-                            _buildFeaturesGuideTab(),
-                            _buildEmailSupportTab(),
-                          ],
-                        ),
+                child: _isComposing 
+                  ? _buildSimpleEmailInterface()
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildGettingStartedTab(),
+                        _buildFeaturesGuideTab(),
+                        _buildEmailSupportTab(),
+                      ],
+                    ),
               ),
             ],
           ),
@@ -151,7 +148,10 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+          colors: [
+            Color(0xFF667EEA),
+            Color(0xFF764BA2),
+          ],
         ),
       ),
       child: Column(
@@ -204,7 +204,10 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                 SizedBox(height: 4),
                 Text(
                   'Get the most out of CivicLink',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
                 ),
               ],
             ),
@@ -250,12 +253,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
               children: [
                 Icon(Icons.rocket_launch, size: 16),
                 SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    'Getting Started',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                Flexible(child: Text('Getting Started', overflow: TextOverflow.ellipsis)),
               ],
             ),
           ),
@@ -267,9 +265,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
               children: [
                 Icon(Icons.explore, size: 16),
                 SizedBox(width: 4),
-                Flexible(
-                  child: Text('Features', overflow: TextOverflow.ellipsis),
-                ),
+                Flexible(child: Text('Features', overflow: TextOverflow.ellipsis)),
               ],
             ),
           ),
@@ -281,9 +277,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
               children: [
                 Icon(Icons.email, size: 16),
                 SizedBox(width: 4),
-                Flexible(
-                  child: Text('Email Support', overflow: TextOverflow.ellipsis),
-                ),
+                Flexible(child: Text('Email Support', overflow: TextOverflow.ellipsis)),
               ],
             ),
           ),
@@ -302,9 +296,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
             'Create Your First Report',
             'Tap the "Report Issue" button to get started',
             Icons.add_circle,
-            const LinearGradient(
-              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
-            ),
+            const LinearGradient(colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)]),
             [
               'Choose a clear, descriptive title',
               'Select the correct category',
@@ -317,9 +309,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
             'Track Your Progress',
             'Monitor all your reports in "My Issues"',
             Icons.timeline,
-            const LinearGradient(
-              colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
-            ),
+            const LinearGradient(colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)]),
             [
               'See real-time status updates',
               'Get notifications when things change',
@@ -332,9 +322,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
             'Explore Community Issues',
             'Check the interactive map for nearby issues',
             Icons.map,
-            const LinearGradient(
-              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-            ),
+            const LinearGradient(colors: [Color(0xFF667EEA), Color(0xFF764BA2)]),
             [
               'Filter by distance and category',
               'Tap markers to see issue details',
@@ -358,9 +346,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
             'Reporting Issues',
             'Master effective issue reporting',
             Icons.report_gmailerrorred,
-            const LinearGradient(
-              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
-            ),
+            const LinearGradient(colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)]),
             [
               'Choose descriptive titles',
               'Select accurate categories',
@@ -373,9 +359,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
             'Issue Tracking',
             'Stay informed about progress',
             Icons.track_changes,
-            const LinearGradient(
-              colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
-            ),
+            const LinearGradient(colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)]),
             [
               'Check "My Issues" regularly',
               'Understand different statuses',
@@ -387,9 +371,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
             'Community Map',
             'Explore community awareness',
             Icons.public,
-            const LinearGradient(
-              colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
-            ),
+            const LinearGradient(colors: [Color(0xFF667EEA), Color(0xFF764BA2)]),
             [
               'Use filters for specific issues',
               'Adjust radius for nearby problems',
@@ -407,43 +389,192 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          _buildContactCard(),
-          const SizedBox(height: 16),
-          _buildQuickHelpCard(),
-          const SizedBox(height: 24),
+          // Contact Information Card
           Container(
             width: double.infinity,
-            height: 50,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Email Icon and Address
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4F46E5).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.email,
+                        color: Color(0xFF4F46E5),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'civiclink.official@gmail.com',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF374151),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Response Time
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF059669).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.access_time,
+                        color: Color(0xFF059669),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Response: 24-48 hours',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF374151),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Common Questions Section
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Section Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B6B).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.help_outline,
+                        color: Color(0xFFFF6B6B),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Common Questions',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Question 1
+                _buildSimpleQuestionItem(
+                  'How do I report an urgent issue?',
+                  'Select "Critical" or "High" priority when creating your report.',
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Question 2
+                _buildSimpleQuestionItem(
+                  'Why can\'t I see my issue on the map?',
+                  'New issues may take a few minutes to appear.',
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Question 3
+                _buildSimpleQuestionItem(
+                  'How do I get faster responses?',
+                  'Include clear photos and detailed descriptions.',
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 30),
+          
+          // Compose Email Button
+          Container(
+            width: double.infinity,
+            height: 56,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
               ),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
                   color: const Color(0xFF4F46E5).withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
             child: Material(
               color: Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               child: InkWell(
                 onTap: () => setState(() => _isComposing = true),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 child: const Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.email, color: Colors.white, size: 20),
-                      SizedBox(width: 8),
+                      Icon(Icons.email, color: Colors.white, size: 24),
+                      SizedBox(width: 12),
                       Text(
                         'Compose Email',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -466,14 +597,13 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
           // Email header bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(color: Color(0xFF4299E1)),
+            decoration: const BoxDecoration(
+              color: Color(0xFF4299E1),
+            ),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFF3182CE),
                     borderRadius: BorderRadius.circular(6),
@@ -492,11 +622,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                         ),
                       ),
                       const SizedBox(width: 2),
-                      const Icon(
-                        Icons.arrow_drop_down,
-                        color: Colors.white,
-                        size: 14,
-                      ),
+                      const Icon(Icons.arrow_drop_down, color: Colors.white, size: 14),
                     ],
                   ),
                 ),
@@ -508,7 +634,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
               ],
             ),
           ),
-
+          
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -518,7 +644,9 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                   Container(
                     margin: const EdgeInsets.only(bottom: 1),
                     padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(color: Color(0xFF4A5568)),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF4A5568),
+                    ),
                     child: Row(
                       children: [
                         const SizedBox(
@@ -534,36 +662,28 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                         Expanded(
                           child: TextFormField(
                             controller: _fromEmailController,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                            ),
+                            style: const TextStyle(color: Colors.white, fontSize: 14),
                             decoration: const InputDecoration(
                               hintText: 'your.email@example.com',
-                              hintStyle: TextStyle(
-                                color: Colors.white54,
-                                fontSize: 14,
-                              ),
+                              hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.zero,
                               isDense: true,
                             ),
                           ),
                         ),
-                        const Icon(
-                          Icons.arrow_drop_down,
-                          color: Colors.white70,
-                          size: 18,
-                        ),
+                        const Icon(Icons.arrow_drop_down, color: Colors.white70, size: 18),
                       ],
                     ),
                   ),
-
+                  
                   // To field
                   Container(
                     margin: const EdgeInsets.only(bottom: 1),
                     padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(color: Color(0xFF4A5568)),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF4A5568),
+                    ),
                     child: const Row(
                       children: [
                         SizedBox(
@@ -593,28 +713,27 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                       ],
                     ),
                   ),
-
+                  
                   // Subject field
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(color: Color(0xFF4A5568)),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF4A5568),
+                    ),
                     child: TextFormField(
                       controller: _subjectController,
                       style: const TextStyle(color: Colors.white, fontSize: 14),
                       decoration: const InputDecoration(
                         hintText: 'Add a subject',
-                        hintStyle: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 14,
-                        ),
+                        hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                         isDense: true,
                       ),
                     ),
                   ),
-
+                  
                   // Message body
                   Expanded(
                     child: Container(
@@ -626,22 +745,13 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                       ),
                       child: TextFormField(
                         controller: _messageController,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          height: 1.4,
-                          fontSize: 14,
-                        ),
+                        style: const TextStyle(color: Colors.white, height: 1.4, fontSize: 14),
                         maxLines: null,
                         expands: true,
                         textAlignVertical: TextAlignVertical.top,
                         decoration: const InputDecoration(
-                          hintText:
-                              'Compose your message here...\n\nPlease describe your issue or question in detail.',
-                          hintStyle: TextStyle(
-                            color: Colors.white54,
-                            height: 1.4,
-                            fontSize: 14,
-                          ),
+                          hintText: 'Compose your message here...\n\nPlease describe your issue or question in detail.',
+                          hintStyle: TextStyle(color: Colors.white54, height: 1.4, fontSize: 14),
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.zero,
                           isDense: true,
@@ -649,7 +759,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                       ),
                     ),
                   ),
-
+                  
                   // Send button
                   Container(
                     margin: const EdgeInsets.only(top: 12),
@@ -657,17 +767,16 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                     height: 44,
                     child: ElevatedButton.icon(
                       onPressed: _isSending ? null : _sendEmail,
-                      icon:
-                          _isSending
-                              ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                              : const Icon(Icons.send, size: 16),
+                      icon: _isSending 
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.send, size: 16),
                       label: Text(_isSending ? 'Sending...' : 'Send Email'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF4299E1),
@@ -770,41 +879,33 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
-              children:
-                  points
-                      .map(
-                        (point) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 4,
-                                height: 4,
-                                margin: const EdgeInsets.only(
-                                  top: 6,
-                                  right: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: gradient,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  point,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF374151),
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+              children: points.map((point) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 4,
+                      margin: const EdgeInsets.only(top: 6, right: 10),
+                      decoration: BoxDecoration(
+                        gradient: gradient,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        point,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF374151),
+                          height: 1.4,
                         ),
-                      )
-                      .toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              )).toList(),
             ),
           ),
         ],
@@ -883,43 +984,38 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
-              children:
-                  features
-                      .map(
-                        (feature) => Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  gradient: gradient,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  feature,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF374151),
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+              children: features.map((feature) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        gradient: gradient,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        feature,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF374151),
+                          height: 1.3,
                         ),
-                      )
-                      .toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              )).toList(),
             ),
           ),
         ],
@@ -958,8 +1054,40 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
           SizedBox(height: 8),
           Text(
             'Follow these tips to get the best results from your reports!',
-            style: TextStyle(fontSize: 14, color: Colors.white, height: 1.4),
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white,
+              height: 1.4,
+            ),
             textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleQuestionItem(String question, String answer) {
+    return Container(
+      width: double.infinity,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            question,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            answer,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF6B7280),
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -990,11 +1118,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
               ),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.support_agent,
-              color: Colors.white,
-              size: 24,
-            ),
+            child: const Icon(Icons.support_agent, color: Colors.white, size: 24),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -1008,7 +1132,10 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
           const SizedBox(height: 6),
           const Text(
             'Our support team is ready to help',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            style: TextStyle(
+              fontSize: 13,
+              color: Color(0xFF6B7280),
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
@@ -1073,11 +1200,7 @@ class _CitizenHelpSupportScreenState extends State<CitizenHelpSupportScreen>
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(
-                  Icons.help_outline,
-                  color: Colors.white,
-                  size: 18,
-                ),
+                child: const Icon(Icons.help_outline, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 12),
               const Text(
