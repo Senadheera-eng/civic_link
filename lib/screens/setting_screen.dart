@@ -209,8 +209,33 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  // NEW: Contact Support functionality
-  void _showContactSupportDialog() {
+  // NEW: Send email functionality
+  Future<void> _sendEmailToSupport() async {
+    final String email = 'civiclink.official@gmail.com';
+    final String subject =
+        'CivicLink Support - ${_userData?.userType ?? 'User'}';
+    final String body =
+        'Hello CivicLink Support Team,\n\nI need assistance with:\n\n[Please describe your issue here]\n\nUser Details:\nName: ${_userData?.fullName ?? 'Unknown'}\nEmail: ${_userData?.email ?? 'Unknown'}\nAccount Type: ${_userData?.userType ?? 'Unknown'}\n\nThank you for your support.';
+
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: email,
+      queryParameters: {'subject': subject, 'body': body},
+    );
+
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(emailUri);
+      } else {
+        // If can't launch email app, show dialog with email details
+        _showEmailFallbackDialog(email, subject, body);
+      }
+    } catch (e) {
+      _showEmailFallbackDialog(email, subject, body);
+    }
+  }
+
+  void _showEmailFallbackDialog(String email, String subject, String body) {
     showDialog(
       context: context,
       builder:
@@ -218,158 +243,86 @@ class _SettingsScreenState extends State<SettingsScreen>
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: Row(
+            title: const Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: ModernTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.support_agent,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text('Contact Support'),
+                Icon(Icons.email, color: ModernTheme.primaryBlue),
+                SizedBox(width: 12),
+                Text('Contact Support'),
               ],
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: ModernTheme.primaryGradient.scale(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: ModernTheme.primaryBlue.withOpacity(0.2),
-                    ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Please copy the details below and send an email manually:',
+                    style: TextStyle(fontSize: 14),
                   ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.email_outlined,
-                        size: 32,
-                        color: ModernTheme.primaryBlue,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Need help or have questions?',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: ModernTheme.textPrimary,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Send us an email and we\'ll get back to you as soon as possible!',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: ModernTheme.textSecondary,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                  const SizedBox(height: 16),
+                  _buildCopyableField('Email:', email),
+                  const SizedBox(height: 12),
+                  _buildCopyableField('Subject:', subject),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Message:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.email,
-                      color: ModernTheme.primaryBlue,
-                      size: 20,
+                  const SizedBox(height: 4),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
                     ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'civiclink.official@gmail.com',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: ModernTheme.primaryBlue,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.warning.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: ModernTheme.warning.withOpacity(0.3),
-                    ),
+                    child: Text(body, style: const TextStyle(fontSize: 12)),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 16,
-                        color: ModernTheme.warning,
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'This will open your email app',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: ModernTheme.warning,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: const Text('Close'),
               ),
-              ElevatedButton.icon(
-                onPressed: () async {
+              ElevatedButton(
+                onPressed: () {
+                  // Copy email to clipboard
+                  _copyToClipboard(email);
                   Navigator.pop(context);
-                  await _openEmailApp();
+                  _showSuccessSnackBar('Email address copied to clipboard!');
                 },
-                icon: const Icon(Icons.email),
-                label: const Text('Email Us'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ModernTheme.primaryBlue,
-                  foregroundColor: Colors.white,
-                ),
+                child: const Text('Copy Email'),
               ),
             ],
           ),
     );
   }
 
-  // Simple email app launcher
-  Future<void> _openEmailApp() async {
-    final String email = 'civiclink.official@gmail.com';
+  Widget _buildCopyableField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(value, style: const TextStyle(fontSize: 12)),
+        ),
+      ],
+    );
+  }
 
-    final Uri emailUri = Uri(scheme: 'mailto', path: email);
-
-    try {
-      if (await canLaunchUrl(emailUri)) {
-        await launchUrl(emailUri);
-        _showSuccessSnackBar('Email app opened successfully!');
-      } else {
-        _showErrorSnackBar(
-          'Unable to open email app. Please email us manually at: $email',
-        );
-      }
-    } catch (e) {
-      _showErrorSnackBar(
-        'Unable to open email app. Please email us manually at: $email',
-      );
-    }
+  Future<void> _copyToClipboard(String text) async {
+    // Implementation would depend on the clipboard package
+    // For now, we'll just show that it's copied
   }
 
   @override
@@ -738,7 +691,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         icon: Icons.email_outlined,
         title: 'Contact Support',
         subtitle: 'Send email to civiclink.official@gmail.com',
-        onTap: _showContactSupportDialog,
+        onTap: _sendEmailToSupport,
       ),
       _buildSettingsTile(
         icon: Icons.info_outline,

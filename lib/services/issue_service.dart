@@ -92,13 +92,51 @@ class IssueService {
         final uploadTask = ref.putFile(file);
 
         final snapshot = await uploadTask;
-        final downloadUrl = await snapshot.ref.getDownloadURL();
+
+        // Check task state
+        if (snapshot.state != TaskState.success) {
+          throw Exception(
+            'Image upload failed with state: ${snapshot.state}, bytesTransferred: ${snapshot.bytesTransferred}, totalBytes: ${snapshot.totalBytes}',
+          );
+        }
+
+        // Retry getDownloadURL up to 3 times with 2-second delays
+        String? downloadUrl;
+        int retries = 3;
+        while (retries > 0) {
+          try {
+            downloadUrl = await snapshot.ref.getDownloadURL();
+            if (downloadUrl != null) {
+              print("✅ getDownloadURL succeeded on attempt $i: $downloadUrl");
+              break;
+            } else {
+              print("⚠️ getDownloadURL returned null, retrying...");
+            }
+          } catch (e, stackTrace) {
+            print(
+              "⚠️ getDownloadURL attempt failed: $e\nStack trace: $stackTrace",
+            );
+            if (retries == 1) {
+              print("❌ All retries failed for image ${i + 1}");
+              throw Exception('Failed to get download URL after retries: $e');
+            }
+            await Future.delayed(const Duration(seconds: 2));
+            retries--;
+          }
+        }
+
+        if (downloadUrl == null) {
+          print(
+            "❌ Download URL still null after retries for image ${i + 1}, skipping...",
+          );
+          continue; // Skip this image and proceed with others
+        }
 
         urls.add(downloadUrl);
         print("✅ Image ${i + 1} uploaded: $downloadUrl");
-      } catch (e) {
-        print("❌ Error uploading image ${i + 1}: $e");
-        throw 'Failed to upload image: $e';
+      } catch (e, stackTrace) {
+        print("❌ Error uploading image ${i + 1}: $e\nStack trace: $stackTrace");
+        throw Exception('Failed to upload image: $e');
       }
     }
 
@@ -169,19 +207,21 @@ class IssueService {
 
       final image = await _imagePicker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1920,
-        maxHeight: 1080,
         imageQuality: 80,
+        maxHeight: 1024,
+        maxWidth: 1024,
       );
 
-      if (image != null) {
-        print("✅ Image captured: ${image.path}");
+      if (image == null) {
+        print("⚠️ Camera image selection cancelled");
+        return null;
       }
 
+      print("✅ Image picked from camera: ${image.path}");
       return image;
     } catch (e) {
-      print("❌ Error picking image from camera: $e");
-      throw 'Failed to capture image: $e';
+      print("❌ Error picking from camera: $e");
+      throw 'Failed to pick from camera: $e';
     }
   }
 
@@ -190,40 +230,53 @@ class IssueService {
     try {
       print("🖼️ Opening gallery...");
 
-      final image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 80,
-      );
-
-      if (image != null) {
-        print("✅ Image selected: ${image.path}");
+      // Check gallery permission
+      final status = await Permission.photos.request();
+      if (!status.isGranted) {
+        throw 'Gallery permission denied';
       }
 
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxHeight: 1024,
+        maxWidth: 1024,
+      );
+
+      if (image == null) {
+        print("⚠️ Gallery image selection cancelled");
+        return null;
+      }
+
+      print("✅ Image picked from gallery: ${image.path}");
       return image;
     } catch (e) {
-      print("❌ Error picking image from gallery: $e");
-      throw 'Failed to select image: $e';
+      print("❌ Error picking from gallery: $e");
+      throw 'Failed to pick from gallery: $e';
     }
   }
 
-  // Pick multiple images
-  Future<List<XFile>> pickMultipleImages() async {
+  // Get all issues
+  Future<List<IssueModel>> getAllIssues() async {
     try {
-      print("🖼️ Opening gallery for multiple selection...");
+      print("🔍 Getting all issues...");
 
-      final images = await _imagePicker.pickMultiImage(
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 80,
-      );
+      final querySnapshot =
+          await _firestore
+              .collection('issues')
+              .orderBy('createdAt', descending: true)
+              .get();
 
-      print("✅ Selected ${images.length} images");
-      return images;
+      final issues =
+          querySnapshot.docs
+              .map((doc) => IssueModel.fromFirestore(doc))
+              .toList();
+
+      print("✅ Found ${issues.length} issues");
+      return issues;
     } catch (e) {
-      print("❌ Error picking multiple images: $e");
-      throw 'Failed to select images: $e';
+      print("❌ Error getting all issues: $e");
+      throw 'Failed to get issues: $e';
     }
   }
 
@@ -232,71 +285,16 @@ class IssueService {
     try {
       final user = currentUser;
       if (user == null) {
-        print("❌ No authenticated user found");
         throw 'User not authenticated';
       }
 
-      print("📋 Getting issues for user: ${user.email} (${user.uid})");
-
-      // Test Firestore connection first
-      try {
-        await FirebaseFirestore.instance.enableNetwork();
-        print("✅ Firestore network enabled");
-      } catch (e) {
-        print("⚠️ Firestore network issue: $e");
-      }
-
-      // Try to get issues with detailed error handling
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('issues')
-          .where('userId', isEqualTo: user.uid)
-          .orderBy('createdAt', descending: true)
-          .get()
-          .timeout(Duration(seconds: 30)); // Add timeout
-
-      print(
-        "✅ Query executed successfully, found ${querySnapshot.docs.length} documents",
-      );
-
-      final issues =
-          querySnapshot.docs.map((doc) {
-            print("📄 Processing document: ${doc.id}");
-            try {
-              return IssueModel.fromFirestore(doc);
-            } catch (e) {
-              print("❌ Error parsing document ${doc.id}: $e");
-              print("📄 Document data: ${doc.data()}");
-              rethrow;
-            }
-          }).toList();
-
-      print("✅ Found ${issues.length} issues for user");
-      return issues;
-    } on FirebaseException catch (e) {
-      print("🔥 Firebase Exception: ${e.code} - ${e.message}");
-      if (e.code == 'permission-denied') {
-        throw 'Permission denied. Please check your account permissions.';
-      } else if (e.code == 'unavailable') {
-        throw 'Service unavailable. Please check your internet connection.';
-      } else {
-        throw 'Database error: ${e.message}';
-      }
-    } catch (e) {
-      print("❌ General error getting user issues: $e");
-      throw 'Failed to get issues: $e';
-    }
-  }
-
-  // Get all issues (for map view)
-  Future<List<IssueModel>> getAllIssues() async {
-    try {
-      print("🗺️ Getting all issues for map view");
+      print("🔍 Getting issues for user: ${user.uid}");
 
       final querySnapshot =
           await _firestore
               .collection('issues')
+              .where('userId', isEqualTo: user.uid)
               .orderBy('createdAt', descending: true)
-              .limit(100) // Limit for performance
               .get();
 
       final issues =
@@ -304,47 +302,33 @@ class IssueService {
               .map((doc) => IssueModel.fromFirestore(doc))
               .toList();
 
-      print("✅ Found ${issues.length} total issues");
+      print("✅ Found ${issues.length} issues for user");
       return issues;
     } catch (e) {
-      print("❌ Error getting all issues: $e");
-      throw 'Failed to get issues: $e';
+      print("❌ Error getting user issues: $e");
+      throw 'Failed to get user issues: $e';
     }
   }
 
-  // Get issue by ID
-  Future<IssueModel?> getIssueById(String issueId) async {
-    try {
-      final doc = await _firestore.collection('issues').doc(issueId).get();
-
-      if (doc.exists) {
-        return IssueModel.fromFirestore(doc);
-      }
-
-      return null;
-    } catch (e) {
-      print("❌ Error getting issue by ID: $e");
-      return null;
-    }
-  }
-
+  // Update issue status (for officials)
   Future<void> updateIssueStatus({
     required String issueId,
     required String newStatus,
-    String? adminNotes,
+    required String adminNotes,
   }) async {
     try {
-      // Update issue in Firestore
+      print("🔄 Updating issue $issueId status to $newStatus");
+
       await _firestore.collection('issues').doc(issueId).update({
         'status': newStatus,
         'adminNotes': adminNotes,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // Get issue details to find the user
+      // Send notification to user
       final issueDoc = await _firestore.collection('issues').doc(issueId).get();
       if (issueDoc.exists) {
-        final issueData = issueDoc.data() as Map<String, dynamic>;
+        final issueData = issueDoc.data()!;
         final userId = issueData['userId'];
         final issueTitle = issueData['title'];
 
@@ -405,7 +389,6 @@ class IssueService {
               .toList();
         });
   }
-  // Add these methods to your existing issue_service.dart
 
   // Get issues by department (for officials)
   Future<List<IssueModel>> getIssuesByDepartment(String department) async {
