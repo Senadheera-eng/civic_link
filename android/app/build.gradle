@@ -16,8 +16,9 @@ def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '
 def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
 
 android {
+    compileSdk flutter.compileSdkVersion
     namespace "com.example.civic_link"
-    compileSdk=35
+    compileSdk=36
     ndkVersion "27.0.12077973"
 
     compileOptions {
@@ -53,11 +54,12 @@ flutter {
 }
 
 dependencies {
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.3'
     implementation 'com.google.android.material:material:1.1.0-alpha09'
     implementation 'com.google.android.gms:play-services-auth:20.7.0'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22"
     implementation 'androidx.multidex:multidex:2.0.1'  // FIXED: multidx → multidex
+     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
     
     // Firebase dependencies with BOM for version management
     implementation platform('com.google.firebase:firebase-bom:32.7.0')

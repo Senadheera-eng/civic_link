@@ -1,4 +1,5 @@
-// screens/register_screen.dart (MODERN UI UPDATE)
+// screens/register_screen.dart (ENHANCED WITH DEPARTMENT SELECTION)
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/modern_theme.dart';
@@ -15,6 +16,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _employeeIdController = TextEditingController();
   final AuthService _authService = AuthService();
 
   late AnimationController _fadeController;
@@ -26,11 +28,97 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   String _selectedUserType = 'citizen';
+  String _selectedDepartment = '';
+
+  // Department list matching your issue categories
+  final List<Map<String, dynamic>> _departments = [
+    {
+      'name': 'Road & Transportation',
+      'icon': Icons.construction,
+      'color': ModernTheme.warning,
+      'description': 'Roads, bridges, traffic systems',
+    },
+    {
+      'name': 'Water & Sewerage',
+      'icon': Icons.water_drop,
+      'color': ModernTheme.primaryBlue,
+      'description': 'Water supply, drainage, sewerage',
+    },
+    {
+      'name': 'Electricity',
+      'icon': Icons.electrical_services,
+      'color': ModernTheme.accent,
+      'description': 'Power supply, electrical infrastructure',
+    },
+    {
+      'name': 'Public Safety',
+      'icon': Icons.security,
+      'color': ModernTheme.error,
+      'description': 'Police, fire, emergency services',
+    },
+    {
+      'name': 'Waste Management',
+      'icon': Icons.delete,
+      'color': ModernTheme.success,
+      'description': 'Garbage collection, recycling',
+    },
+    {
+      'name': 'Parks & Recreation',
+      'icon': Icons.park,
+      'color': Color(0xFF4CAF50),
+      'description': 'Parks, playgrounds, recreation facilities',
+    },
+    {
+      'name': 'Street Lighting',
+      'icon': Icons.lightbulb,
+      'color': Color(0xFFFFC107),
+      'description': 'Street lights, public lighting',
+    },
+    {
+      'name': 'Public Buildings',
+      'icon': Icons.business,
+      'color': Color(0xFF9C27B0),
+      'description': 'Government buildings, public facilities',
+    },
+    {
+      'name': 'Traffic Management',
+      'icon': Icons.traffic,
+      'color': Color(0xFFFF5722),
+      'description': 'Traffic signals, road signs',
+    },
+    {
+      'name': 'Environmental Issues',
+      'icon': Icons.eco,
+      'color': Color(0xFF8BC34A),
+      'description': 'Environmental protection, pollution',
+    },
+  ];
 
   @override
   void initState() {
     super.initState();
     _initAnimations();
+    // Set default department to first one
+    _selectedDepartment = _departments.first['name'];
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   void _initAnimations() {
@@ -62,6 +150,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _employeeIdController.dispose();
     _fadeController.dispose();
     _slideController.dispose();
     super.dispose();
@@ -70,15 +159,45 @@ class _RegisterScreenState extends State<RegisterScreen>
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Additional validation for official accounts
+    if (_selectedUserType == 'official') {
+      if (_selectedDepartment.isEmpty) {
+        _showErrorSnackBar('Please select a department');
+        return;
+      }
+      if (_employeeIdController.text.trim().isEmpty) {
+        _showErrorSnackBar('Employee ID is required for official accounts');
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      await _authService.registerWithEmail(
+      print("🚀 Starting registration process...");
+      print("📧 Email: ${_emailController.text}");
+      print("👤 Name: ${_fullNameController.text}");
+      print("🏷️ Type: $_selectedUserType");
+
+      if (_selectedUserType == 'official') {
+        print("🏢 Department: $_selectedDepartment");
+        print("🆔 Employee ID: ${_employeeIdController.text.trim()}");
+      }
+
+      final result = await _authService.registerWithEmail(
         _emailController.text,
         _passwordController.text,
         _fullNameController.text,
         _selectedUserType,
+        department:
+            _selectedUserType == 'official' ? _selectedDepartment : null,
+        employeeId:
+            _selectedUserType == 'official'
+                ? _employeeIdController.text.trim()
+                : null,
       );
+
+      print("✅ Registration completed successfully");
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -100,23 +219,8 @@ class _RegisterScreenState extends State<RegisterScreen>
 
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text(e.toString())),
-            ],
-          ),
-          backgroundColor: ModernTheme.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+      print("❌ Registration failed: $e");
+      _showErrorSnackBar(e.toString());
     } finally {
       setState(() => _isLoading = false);
     }
@@ -268,22 +372,10 @@ class _RegisterScreenState extends State<RegisterScreen>
             TextFormField(
               controller: _fullNameController,
               style: const TextStyle(fontSize: 16),
-              decoration: InputDecoration(
-                labelText: 'Full Name',
-                hintText: 'Enter your full name',
-                prefixIcon: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.person_outline,
-                    color: ModernTheme.primaryBlue,
-                    size: 20,
-                  ),
-                ),
+              decoration: _buildInputDecoration(
+                'Full Name',
+                'Enter your full name',
+                Icons.person_outline,
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -303,22 +395,10 @@ class _RegisterScreenState extends State<RegisterScreen>
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               style: const TextStyle(fontSize: 16),
-              decoration: InputDecoration(
-                labelText: 'Email Address',
-                hintText: 'Enter your email',
-                prefixIcon: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.email_outlined,
-                    color: ModernTheme.primaryBlue,
-                    size: 20,
-                  ),
-                ),
+              decoration: _buildInputDecoration(
+                'Email Address',
+                'Enter your email',
+                Icons.email_outlined,
               ),
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -335,8 +415,16 @@ class _RegisterScreenState extends State<RegisterScreen>
 
             const SizedBox(height: 20),
 
-            // User Type Selection
-            _buildUserTypeSelection(),
+            // Account Type Selection
+            _buildAccountTypeSelection(),
+
+            // Show department selection and employee ID for officials
+            if (_selectedUserType == 'official') ...[
+              const SizedBox(height: 20),
+              _buildDepartmentSelection(),
+              const SizedBox(height: 18),
+              _buildEmployeeIdField(),
+            ],
 
             const SizedBox(height: 20),
 
@@ -345,22 +433,10 @@ class _RegisterScreenState extends State<RegisterScreen>
               controller: _passwordController,
               obscureText: _obscurePassword,
               style: const TextStyle(fontSize: 16),
-              decoration: InputDecoration(
-                labelText: 'Password',
-                hintText: 'Enter your password',
-                prefixIcon: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.lock_outline,
-                    color: ModernTheme.primaryBlue,
-                    size: 20,
-                  ),
-                ),
+              decoration: _buildInputDecoration(
+                'Password',
+                'Enter your password',
+                Icons.lock_outline,
                 suffixIcon: IconButton(
                   icon: Icon(
                     _obscurePassword ? Icons.visibility_off : Icons.visibility,
@@ -389,22 +465,10 @@ class _RegisterScreenState extends State<RegisterScreen>
               controller: _confirmPasswordController,
               obscureText: _obscureConfirmPassword,
               style: const TextStyle(fontSize: 16),
-              decoration: InputDecoration(
-                labelText: 'Confirm Password',
-                hintText: 'Confirm your password',
-                prefixIcon: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.lock_outline,
-                    color: ModernTheme.primaryBlue,
-                    size: 20,
-                  ),
-                ),
+              decoration: _buildInputDecoration(
+                'Confirm Password',
+                'Confirm your password',
+                Icons.lock_outline,
                 suffixIcon: IconButton(
                   icon: Icon(
                     _obscureConfirmPassword
@@ -447,7 +511,29 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  Widget _buildUserTypeSelection() {
+  InputDecoration _buildInputDecoration(
+    String labelText,
+    String hintText,
+    IconData icon, {
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      hintText: hintText,
+      prefixIcon: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: ModernTheme.primaryBlue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: ModernTheme.primaryBlue, size: 20),
+      ),
+      suffixIcon: suffixIcon,
+    );
+  }
+
+  Widget _buildAccountTypeSelection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -464,7 +550,11 @@ class _RegisterScreenState extends State<RegisterScreen>
           children: [
             Expanded(
               child: GestureDetector(
-                onTap: () => setState(() => _selectedUserType = 'citizen'),
+                onTap:
+                    () => setState(() {
+                      _selectedUserType = 'citizen';
+                      _selectedDepartment = _departments.first['name'];
+                    }),
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -548,28 +638,32 @@ class _RegisterScreenState extends State<RegisterScreen>
             const SizedBox(width: 16),
             Expanded(
               child: GestureDetector(
-                onTap: () => setState(() => _selectedUserType = 'admin'),
+                onTap:
+                    () => setState(() {
+                      _selectedUserType = 'official';
+                      _selectedDepartment = _departments.first['name'];
+                    }),
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     gradient:
-                        _selectedUserType == 'admin'
+                        _selectedUserType == 'official'
                             ? ModernTheme.primaryGradient
                             : null,
                     color:
-                        _selectedUserType == 'admin'
+                        _selectedUserType == 'official'
                             ? null
                             : ModernTheme.surfaceVariant,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color:
-                          _selectedUserType == 'admin'
+                          _selectedUserType == 'official'
                               ? Colors.transparent
                               : ModernTheme.textTertiary.withOpacity(0.3),
                       width: 1.5,
                     ),
                     boxShadow:
-                        _selectedUserType == 'admin'
+                        _selectedUserType == 'official'
                             ? [
                               BoxShadow(
                                 color: ModernTheme.primaryBlue.withOpacity(0.3),
@@ -585,15 +679,15 @@ class _RegisterScreenState extends State<RegisterScreen>
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color:
-                              _selectedUserType == 'admin'
+                              _selectedUserType == 'official'
                                   ? Colors.white.withOpacity(0.2)
                                   : ModernTheme.accent.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
-                          Icons.admin_panel_settings,
+                          Icons.badge,
                           color:
-                              _selectedUserType == 'admin'
+                              _selectedUserType == 'official'
                                   ? Colors.white
                                   : ModernTheme.accent,
                           size: 24,
@@ -604,7 +698,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                         'Official',
                         style: TextStyle(
                           color:
-                              _selectedUserType == 'admin'
+                              _selectedUserType == 'official'
                                   ? Colors.white
                                   : ModernTheme.textPrimary,
                           fontWeight: FontWeight.bold,
@@ -613,10 +707,10 @@ class _RegisterScreenState extends State<RegisterScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Manage and resolve issues',
+                        'Manage department issues',
                         style: TextStyle(
                           color:
-                              _selectedUserType == 'admin'
+                              _selectedUserType == 'official'
                                   ? Colors.white.withOpacity(0.9)
                                   : ModernTheme.textSecondary,
                           fontSize: 12,
@@ -632,6 +726,129 @@ class _RegisterScreenState extends State<RegisterScreen>
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildDepartmentSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Department',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: ModernTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: ModernTheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: ModernTheme.primaryBlue.withOpacity(0.3),
+              width: 1.5,
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedDepartment,
+              isExpanded: true,
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: ModernTheme.primaryBlue,
+              ),
+              style: const TextStyle(
+                fontSize: 16,
+                color: ModernTheme.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+              dropdownColor: ModernTheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              menuMaxHeight: 300,
+              items:
+                  _departments.map((department) {
+                    return DropdownMenuItem<String>(
+                      value: department['name'],
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: (department['color'] as Color)
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                department['icon'],
+                                size: 18,
+                                color: department['color'],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    department['name'],
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    department['description'],
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: ModernTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() => _selectedDepartment = newValue);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmployeeIdField() {
+    return TextFormField(
+      controller: _employeeIdController,
+      style: const TextStyle(fontSize: 16),
+      decoration: _buildInputDecoration(
+        'Employee ID',
+        'Enter your official employee ID',
+        Icons.badge_outlined,
+      ),
+      validator: (value) {
+        if (_selectedUserType == 'official') {
+          if (value == null || value.trim().isEmpty) {
+            return 'Employee ID is required for official accounts';
+          }
+          if (value.trim().length < 3) {
+            return 'Employee ID must be at least 3 characters';
+          }
+        }
+        return null;
+      },
     );
   }
 

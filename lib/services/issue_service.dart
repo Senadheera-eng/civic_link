@@ -232,27 +232,57 @@ class IssueService {
     try {
       final user = currentUser;
       if (user == null) {
+        print("❌ No authenticated user found");
         throw 'User not authenticated';
       }
 
-      print("📋 Getting issues for user: ${user.email}");
+      print("📋 Getting issues for user: ${user.email} (${user.uid})");
 
-      final querySnapshot =
-          await _firestore
-              .collection('issues')
-              .where('userId', isEqualTo: user.uid)
-              .orderBy('createdAt', descending: true)
-              .get();
+      // Test Firestore connection first
+      try {
+        await FirebaseFirestore.instance.enableNetwork();
+        print("✅ Firestore network enabled");
+      } catch (e) {
+        print("⚠️ Firestore network issue: $e");
+      }
+
+      // Try to get issues with detailed error handling
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('issues')
+          .where('userId', isEqualTo: user.uid)
+          .orderBy('createdAt', descending: true)
+          .get()
+          .timeout(Duration(seconds: 30)); // Add timeout
+
+      print(
+        "✅ Query executed successfully, found ${querySnapshot.docs.length} documents",
+      );
 
       final issues =
-          querySnapshot.docs
-              .map((doc) => IssueModel.fromFirestore(doc))
-              .toList();
+          querySnapshot.docs.map((doc) {
+            print("📄 Processing document: ${doc.id}");
+            try {
+              return IssueModel.fromFirestore(doc);
+            } catch (e) {
+              print("❌ Error parsing document ${doc.id}: $e");
+              print("📄 Document data: ${doc.data()}");
+              rethrow;
+            }
+          }).toList();
 
       print("✅ Found ${issues.length} issues for user");
       return issues;
+    } on FirebaseException catch (e) {
+      print("🔥 Firebase Exception: ${e.code} - ${e.message}");
+      if (e.code == 'permission-denied') {
+        throw 'Permission denied. Please check your account permissions.';
+      } else if (e.code == 'unavailable') {
+        throw 'Service unavailable. Please check your internet connection.';
+      } else {
+        throw 'Database error: ${e.message}';
+      }
     } catch (e) {
-      print("❌ Error getting user issues: $e");
+      print("❌ General error getting user issues: $e");
       throw 'Failed to get issues: $e';
     }
   }
@@ -339,19 +369,157 @@ class IssueService {
   Stream<List<IssueModel>> getUserIssuesStream() {
     final user = currentUser;
     if (user == null) {
+      print("❌ No user for stream");
       return Stream.value([]);
     }
 
-    return _firestore
+    print("🔄 Setting up issues stream for user: ${user.uid}");
+
+    return FirebaseFirestore.instance
         .collection('issues')
         .where('userId', isEqualTo: user.uid)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snapshot) =>
-              snapshot.docs
-                  .map((doc) => IssueModel.fromFirestore(doc))
-                  .toList(),
-        );
+        .handleError((error) {
+          print("❌ Stream error: $error");
+          if (error is FirebaseException) {
+            print(
+              "🔥 Firebase Exception in stream: ${error.code} - ${error.message}",
+            );
+          }
+        })
+        .map((snapshot) {
+          print("📊 Stream update: ${snapshot.docs.length} documents");
+          return snapshot.docs
+              .map((doc) {
+                try {
+                  return IssueModel.fromFirestore(doc);
+                } catch (e) {
+                  print("❌ Error parsing document in stream ${doc.id}: $e");
+                  // Return a placeholder or skip this document
+                  return null;
+                }
+              })
+              .where((issue) => issue != null)
+              .cast<IssueModel>()
+              .toList();
+        });
+  }
+  // Add these methods to your existing issue_service.dart
+
+  // Get issues by department (for officials)
+  Future<List<IssueModel>> getIssuesByDepartment(String department) async {
+    try {
+      print("🔍 IssueService: Getting issues for department: $department");
+
+      final querySnapshot =
+          await FirebaseFirestore.instance
+              .collection('issues')
+              .where('category', isEqualTo: department)
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      final issues =
+          querySnapshot.docs
+              .map((doc) => IssueModel.fromFirestore(doc))
+              .toList();
+
+      print(
+        "✅ IssueService: Found ${issues.length} issues for department $department",
+      );
+      return issues;
+    } catch (e) {
+      print("❌ Error getting issues by department: $e");
+      return [];
+    }
+  }
+
+  Future<List<IssueModel>> getAssignedIssues(String userId) async {
+    try {
+      print("🔍 IssueService: Getting assigned issues for user: $userId");
+
+      final querySnapshot =
+          await FirebaseFirestore.instance
+              .collection('issues')
+              .where('assignedTo', isEqualTo: userId)
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      final issues =
+          querySnapshot.docs
+              .map((doc) => IssueModel.fromFirestore(doc))
+              .toList();
+
+      print(
+        "✅ IssueService: Found ${issues.length} assigned issues for user $userId",
+      );
+      return issues;
+    } catch (e) {
+      print("❌ Error getting assigned issues: $e");
+      return [];
+    }
+  }
+
+  Future<void> bulkUpdateIssues({
+    required List<String> issueIds,
+    required String newStatus,
+    required String notes,
+  }) async {
+    try {
+      print(
+        "🔄 IssueService: Bulk updating ${issueIds.length} issues to status: $newStatus",
+      );
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      for (String issueId in issueIds) {
+        final docRef = FirebaseFirestore.instance
+            .collection('issues')
+            .doc(issueId);
+        batch.update(docRef, {
+          'status': newStatus,
+          'adminNotes': notes,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': currentUser?.uid,
+        });
+      }
+
+      await batch.commit();
+      print(
+        "✅ IssueService: Bulk update completed for ${issueIds.length} issues",
+      );
+    } catch (e) {
+      print("❌ Error in bulk update: $e");
+      throw 'Failed to update issues: $e';
+    }
+  }
+
+  Future<void> assignIssue({
+    required String issueId,
+    required String assignedToId,
+    required String assignedToName,
+    required String notes,
+  }) async {
+    try {
+      print("👥 IssueService: Assigning issue $issueId to $assignedToName");
+
+      await FirebaseFirestore.instance
+          .collection('issues')
+          .doc(issueId)
+          .update({
+            'assignedTo': assignedToId,
+            'assignedToName': assignedToName,
+            'adminNotes': notes,
+            'status': 'in_progress',
+            'updatedAt': FieldValue.serverTimestamp(),
+            'assignedAt': FieldValue.serverTimestamp(),
+            'assignedBy': currentUser?.uid,
+          });
+
+      print("✅ IssueService: Issue assigned successfully");
+    } catch (e) {
+      print("❌ Error assigning issue: $e");
+      throw 'Failed to assign issue: $e';
+    }
   }
 }

@@ -1,203 +1,373 @@
-// services/settings_service.dart
+// services/settings_service.dart (UPDATED VERSION)
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 class SettingsService extends ChangeNotifier {
-  // Private instance
   static final SettingsService _instance = SettingsService._internal();
-
-  // Factory constructor
   factory SettingsService() => _instance;
-
-  // Private constructor
   SettingsService._internal();
 
-  // Settings properties
-  bool _notificationsEnabled = true;
-  bool _emailNotifications = true;
-  bool _pushNotifications = true;
-  bool _locationEnabled = false;
+  SharedPreferences? _prefs;
+
+  // General Settings
+  bool _isDarkMode = false;
   String _selectedLanguage = 'English';
-  String _selectedTheme = 'Light';
-  bool _darkMode = false;
-  bool _biometricEnabled = false;
+  bool _notificationsEnabled = true;
+  bool _soundEnabled = true;
 
-  // Getters
-  bool get notificationsEnabled => _notificationsEnabled;
-  bool get emailNotifications => _emailNotifications;
-  bool get pushNotifications => _pushNotifications;
-  bool get locationEnabled => _locationEnabled;
+  // Official-specific Settings
+  bool _autoAssignIssues = false;
+  bool _urgentNotifications = true;
+  bool _statusUpdateNotifications = true;
+  bool _weeklyReportsEnabled = true;
+  bool _showResolutionTime = true;
+  bool _enableQuickActions = true;
+  String _workingHours = '9:00 AM - 5:00 PM';
+  int _maxDailyAssignments = 10;
+
+  // Getters for general settings
+  bool get isDarkMode => _isDarkMode;
   String get selectedLanguage => _selectedLanguage;
-  String get selectedTheme => _selectedTheme;
-  bool get darkMode => _darkMode;
-  bool get biometricEnabled => _biometricEnabled;
+  bool get notificationsEnabled => _notificationsEnabled;
+  bool get soundEnabled => _soundEnabled;
 
-  // Initialize settings (would typically load from SharedPreferences)
+  // Getters for official settings
+  bool get autoAssignIssues => _autoAssignIssues;
+  bool get urgentNotifications => _urgentNotifications;
+  bool get statusUpdateNotifications => _statusUpdateNotifications;
+  bool get weeklyReportsEnabled => _weeklyReportsEnabled;
+  bool get showResolutionTime => _showResolutionTime;
+  bool get enableQuickActions => _enableQuickActions;
+  String get workingHours => _workingHours;
+  int get maxDailyAssignments => _maxDailyAssignments;
+
   Future<void> initializeSettings() async {
     try {
-      // In a real app, you would load from SharedPreferences here
-      // SharedPreferences prefs = await SharedPreferences.getInstance();
-      // _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
-      // _emailNotifications = prefs.getBool('email_notifications') ?? true;
-      // etc.
-
-      print("🔧 SettingsService: Settings initialized");
-      notifyListeners();
+      _prefs = await SharedPreferences.getInstance();
+      await _loadSettings();
+      print("✅ Settings service initialized successfully");
     } catch (e) {
-      print("❌ SettingsService: Failed to initialize settings: $e");
+      print("❌ Failed to initialize settings: $e");
     }
   }
 
-  // Update notification settings
-  Future<void> updateNotificationSettings({
-    bool? notificationsEnabled,
-    bool? emailNotifications,
-    bool? pushNotifications,
-  }) async {
-    try {
-      if (notificationsEnabled != null) {
-        _notificationsEnabled = notificationsEnabled;
-        // await _saveToPrefs('notifications_enabled', notificationsEnabled);
-      }
+  Future<void> _loadSettings() async {
+    if (_prefs == null) return;
 
-      if (emailNotifications != null) {
-        _emailNotifications = emailNotifications;
-        // await _saveToPrefs('email_notifications', emailNotifications);
-      }
+    // Load general settings
+    _isDarkMode = _prefs!.getBool('dark_mode') ?? false;
+    _selectedLanguage = _prefs!.getString('language') ?? 'English';
+    _notificationsEnabled = _prefs!.getBool('notifications_enabled') ?? true;
+    _soundEnabled = _prefs!.getBool('sound_enabled') ?? true;
 
-      if (pushNotifications != null) {
-        _pushNotifications = pushNotifications;
-        // await _saveToPrefs('push_notifications', pushNotifications);
-      }
+    // Load official settings
+    _autoAssignIssues = _prefs!.getBool('official_auto_assign_issues') ?? false;
+    _urgentNotifications =
+        _prefs!.getBool('official_urgent_notifications') ?? true;
+    _statusUpdateNotifications =
+        _prefs!.getBool('official_status_update_notifications') ?? true;
+    _weeklyReportsEnabled = _prefs!.getBool('official_weekly_reports') ?? true;
+    _showResolutionTime =
+        _prefs!.getBool('official_show_resolution_time') ?? true;
+    _enableQuickActions =
+        _prefs!.getBool('official_enable_quick_actions') ?? true;
+    _workingHours =
+        _prefs!.getString('official_working_hours') ?? '9:00 AM - 5:00 PM';
+    _maxDailyAssignments =
+        _prefs!.getInt('official_max_daily_assignments') ?? 10;
 
-      print("🔧 SettingsService: Notification settings updated");
-      notifyListeners();
-    } catch (e) {
-      print("❌ SettingsService: Failed to update notification settings: $e");
+    notifyListeners();
+  }
+
+  // General Settings Methods
+  Future<void> setDarkMode(bool value) async {
+    _isDarkMode = value;
+    await _prefs?.setBool('dark_mode', value);
+    notifyListeners();
+    print("🎨 Dark mode ${value ? 'enabled' : 'disabled'}");
+  }
+
+  Future<void> setLanguage(String language) async {
+    _selectedLanguage = language;
+    await _prefs?.setString('language', language);
+    notifyListeners();
+    print("🌍 Language changed to $language");
+  }
+
+  Future<void> setNotifications(bool value) async {
+    _notificationsEnabled = value;
+    await _prefs?.setBool('notifications_enabled', value);
+    notifyListeners();
+    print("🔔 Notifications ${value ? 'enabled' : 'disabled'}");
+  }
+
+  Future<void> setSoundEnabled(bool value) async {
+    _soundEnabled = value;
+    await _prefs?.setBool('sound_enabled', value);
+    notifyListeners();
+    print("🔊 Sound ${value ? 'enabled' : 'disabled'}");
+  }
+
+  // Official Settings Methods
+  Future<void> setAutoAssignIssues(bool value) async {
+    _autoAssignIssues = value;
+    await _prefs?.setBool('official_auto_assign_issues', value);
+    notifyListeners();
+    print("📋 Auto-assign issues ${value ? 'enabled' : 'disabled'}");
+  }
+
+  Future<void> setUrgentNotifications(bool value) async {
+    _urgentNotifications = value;
+    await _prefs?.setBool('official_urgent_notifications', value);
+    notifyListeners();
+    print("🚨 Urgent notifications ${value ? 'enabled' : 'disabled'}");
+  }
+
+  Future<void> setStatusUpdateNotifications(bool value) async {
+    _statusUpdateNotifications = value;
+    await _prefs?.setBool('official_status_update_notifications', value);
+    notifyListeners();
+    print("📱 Status update notifications ${value ? 'enabled' : 'disabled'}");
+  }
+
+  Future<void> setWeeklyReports(bool value) async {
+    _weeklyReportsEnabled = value;
+    await _prefs?.setBool('official_weekly_reports', value);
+    notifyListeners();
+    print("📊 Weekly reports ${value ? 'enabled' : 'disabled'}");
+  }
+
+  Future<void> setShowResolutionTime(bool value) async {
+    _showResolutionTime = value;
+    await _prefs?.setBool('official_show_resolution_time', value);
+    notifyListeners();
+    print("⏱️ Show resolution time ${value ? 'enabled' : 'disabled'}");
+  }
+
+  Future<void> setQuickActions(bool value) async {
+    _enableQuickActions = value;
+    await _prefs?.setBool('official_enable_quick_actions', value);
+    notifyListeners();
+    print("⚡ Quick actions ${value ? 'enabled' : 'disabled'}");
+  }
+
+  Future<void> setWorkingHours(String hours) async {
+    _workingHours = hours;
+    await _prefs?.setString('official_working_hours', hours);
+    notifyListeners();
+    print("🕒 Working hours set to $hours");
+  }
+
+  Future<void> setMaxDailyAssignments(int max) async {
+    _maxDailyAssignments = max;
+    await _prefs?.setInt('official_max_daily_assignments', max);
+    notifyListeners();
+    print("📝 Max daily assignments set to $max");
+  }
+
+  // Generic method to get official settings
+  T getOfficialSetting<T>(String key, T defaultValue) {
+    if (_prefs == null) return defaultValue;
+
+    switch (T) {
+      case bool:
+        return (_prefs!.getBool('official_$key') ?? defaultValue) as T;
+      case int:
+        return (_prefs!.getInt('official_$key') ?? defaultValue) as T;
+      case String:
+        return (_prefs!.getString('official_$key') ?? defaultValue) as T;
+      case double:
+        return (_prefs!.getDouble('official_$key') ?? defaultValue) as T;
+      default:
+        return defaultValue;
     }
   }
 
-  // Update app preferences
-  Future<void> updateAppPreferences({
-    String? language,
-    String? theme,
-    bool? darkMode,
-  }) async {
-    try {
-      if (language != null) {
-        _selectedLanguage = language;
-        // await _saveToPrefs('selected_language', language);
-      }
+  // Generic method to save official settings
+  Future<void> saveOfficialSetting<T>(String key, T value) async {
+    if (_prefs == null) return;
 
-      if (theme != null) {
-        _selectedTheme = theme;
-        // await _saveToPrefs('selected_theme', theme);
-      }
+    switch (T) {
+      case bool:
+        await _prefs!.setBool('official_$key', value as bool);
+        break;
+      case int:
+        await _prefs!.setInt('official_$key', value as int);
+        break;
+      case String:
+        await _prefs!.setString('official_$key', value as String);
+        break;
+      case double:
+        await _prefs!.setDouble('official_$key', value as double);
+        break;
+    }
 
-      if (darkMode != null) {
-        _darkMode = darkMode;
-        // await _saveToPrefs('dark_mode', darkMode);
-      }
+    // Update internal state based on key
+    _updateInternalState(key, value);
+    notifyListeners();
+    print("💾 Official setting '$key' saved: $value");
+  }
 
-      print("🔧 SettingsService: App preferences updated");
-      notifyListeners();
-    } catch (e) {
-      print("❌ SettingsService: Failed to update app preferences: $e");
+  void _updateInternalState<T>(String key, T value) {
+    switch (key) {
+      case 'auto_assign_issues':
+        _autoAssignIssues = value as bool;
+        break;
+      case 'urgent_notifications':
+        _urgentNotifications = value as bool;
+        break;
+      case 'status_update_notifications':
+        _statusUpdateNotifications = value as bool;
+        break;
+      case 'weekly_reports':
+        _weeklyReportsEnabled = value as bool;
+        break;
+      case 'show_resolution_time':
+        _showResolutionTime = value as bool;
+        break;
+      case 'enable_quick_actions':
+        _enableQuickActions = value as bool;
+        break;
+      case 'working_hours':
+        _workingHours = value as String;
+        break;
+      case 'max_daily_assignments':
+        _maxDailyAssignments = value as int;
+        break;
     }
   }
 
-  // Update privacy settings
-  Future<void> updatePrivacySettings({
-    bool? locationEnabled,
-    bool? biometricEnabled,
-  }) async {
-    try {
-      if (locationEnabled != null) {
-        _locationEnabled = locationEnabled;
-        // await _saveToPrefs('location_enabled', locationEnabled);
-      }
+  // Method to reset all settings to defaults
+  Future<void> resetAllSettings() async {
+    if (_prefs == null) return;
 
-      if (biometricEnabled != null) {
-        _biometricEnabled = biometricEnabled;
-        // await _saveToPrefs('biometric_enabled', biometricEnabled);
-      }
+    // Clear all preferences
+    await _prefs!.clear();
 
-      print("🔧 SettingsService: Privacy settings updated");
-      notifyListeners();
-    } catch (e) {
-      print("❌ SettingsService: Failed to update privacy settings: $e");
-    }
+    // Reset to defaults
+    _isDarkMode = false;
+    _selectedLanguage = 'English';
+    _notificationsEnabled = true;
+    _soundEnabled = true;
+    _autoAssignIssues = false;
+    _urgentNotifications = true;
+    _statusUpdateNotifications = true;
+    _weeklyReportsEnabled = true;
+    _showResolutionTime = true;
+    _enableQuickActions = true;
+    _workingHours = '9:00 AM - 5:00 PM';
+    _maxDailyAssignments = 10;
+
+    notifyListeners();
+    print("🔄 All settings reset to defaults");
   }
 
-  // Reset all settings to defaults
-  Future<void> resetToDefaults() async {
-    try {
-      _notificationsEnabled = true;
-      _emailNotifications = true;
-      _pushNotifications = true;
-      _locationEnabled = false;
-      _selectedLanguage = 'English';
-      _selectedTheme = 'Light';
-      _darkMode = false;
-      _biometricEnabled = false;
+  // Method to reset only official settings
+  Future<void> resetOfficialSettings() async {
+    if (_prefs == null) return;
 
-      // In a real app, clear SharedPreferences
-      // SharedPreferences prefs = await SharedPreferences.getInstance();
-      // await prefs.clear();
-
-      print("🔧 SettingsService: Settings reset to defaults");
-      notifyListeners();
-    } catch (e) {
-      print("❌ SettingsService: Failed to reset settings: $e");
+    // Remove official settings
+    final keys = _prefs!.getKeys().where((key) => key.startsWith('official_'));
+    for (final key in keys) {
+      await _prefs!.remove(key);
     }
+
+    // Reset official settings to defaults
+    _autoAssignIssues = false;
+    _urgentNotifications = true;
+    _statusUpdateNotifications = true;
+    _weeklyReportsEnabled = true;
+    _showResolutionTime = true;
+    _enableQuickActions = true;
+    _workingHours = '9:00 AM - 5:00 PM';
+    _maxDailyAssignments = 10;
+
+    notifyListeners();
+    print("🔄 Official settings reset to defaults");
   }
 
-  // Export settings as JSON (for data export feature)
+  // Export settings as Map for backup
   Map<String, dynamic> exportSettings() {
     return {
-      'notifications_enabled': _notificationsEnabled,
-      'email_notifications': _emailNotifications,
-      'push_notifications': _pushNotifications,
-      'location_enabled': _locationEnabled,
-      'selected_language': _selectedLanguage,
-      'selected_theme': _selectedTheme,
-      'dark_mode': _darkMode,
-      'biometric_enabled': _biometricEnabled,
-      'exported_at': DateTime.now().toIso8601String(),
+      'general': {
+        'dark_mode': _isDarkMode,
+        'language': _selectedLanguage,
+        'notifications_enabled': _notificationsEnabled,
+        'sound_enabled': _soundEnabled,
+      },
+      'official': {
+        'auto_assign_issues': _autoAssignIssues,
+        'urgent_notifications': _urgentNotifications,
+        'status_update_notifications': _statusUpdateNotifications,
+        'weekly_reports': _weeklyReportsEnabled,
+        'show_resolution_time': _showResolutionTime,
+        'enable_quick_actions': _enableQuickActions,
+        'working_hours': _workingHours,
+        'max_daily_assignments': _maxDailyAssignments,
+      },
     };
   }
 
-  // Import settings from JSON
+  // Import settings from Map (for restore)
   Future<void> importSettings(Map<String, dynamic> settings) async {
+    if (_prefs == null) return;
+
     try {
-      _notificationsEnabled = settings['notifications_enabled'] ?? true;
-      _emailNotifications = settings['email_notifications'] ?? true;
-      _pushNotifications = settings['push_notifications'] ?? true;
-      _locationEnabled = settings['location_enabled'] ?? false;
-      _selectedLanguage = settings['selected_language'] ?? 'English';
-      _selectedTheme = settings['selected_theme'] ?? 'Light';
-      _darkMode = settings['dark_mode'] ?? false;
-      _biometricEnabled = settings['biometric_enabled'] ?? false;
+      // Import general settings
+      if (settings.containsKey('general')) {
+        final general = settings['general'] as Map<String, dynamic>;
+        if (general.containsKey('dark_mode')) {
+          await setDarkMode(general['dark_mode'] as bool);
+        }
+        if (general.containsKey('language')) {
+          await setLanguage(general['language'] as String);
+        }
+        if (general.containsKey('notifications_enabled')) {
+          await setNotifications(general['notifications_enabled'] as bool);
+        }
+        if (general.containsKey('sound_enabled')) {
+          await setSoundEnabled(general['sound_enabled'] as bool);
+        }
+      }
 
-      print("🔧 SettingsService: Settings imported successfully");
-      notifyListeners();
+      // Import official settings
+      if (settings.containsKey('official')) {
+        final official = settings['official'] as Map<String, dynamic>;
+        if (official.containsKey('auto_assign_issues')) {
+          await setAutoAssignIssues(official['auto_assign_issues'] as bool);
+        }
+        if (official.containsKey('urgent_notifications')) {
+          await setUrgentNotifications(
+            official['urgent_notifications'] as bool,
+          );
+        }
+        if (official.containsKey('status_update_notifications')) {
+          await setStatusUpdateNotifications(
+            official['status_update_notifications'] as bool,
+          );
+        }
+        if (official.containsKey('weekly_reports')) {
+          await setWeeklyReports(official['weekly_reports'] as bool);
+        }
+        if (official.containsKey('show_resolution_time')) {
+          await setShowResolutionTime(official['show_resolution_time'] as bool);
+        }
+        if (official.containsKey('enable_quick_actions')) {
+          await setQuickActions(official['enable_quick_actions'] as bool);
+        }
+        if (official.containsKey('working_hours')) {
+          await setWorkingHours(official['working_hours'] as String);
+        }
+        if (official.containsKey('max_daily_assignments')) {
+          await setMaxDailyAssignments(
+            official['max_daily_assignments'] as int,
+          );
+        }
+      }
+
+      print("📥 Settings imported successfully");
     } catch (e) {
-      print("❌ SettingsService: Failed to import settings: $e");
+      print("❌ Failed to import settings: $e");
     }
   }
-
-  // Helper method to save to SharedPreferences (commented out for now)
-  /*
-  Future<void> _saveToPrefs(String key, dynamic value) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    if (value is bool) {
-      await prefs.setBool(key, value);
-    } else if (value is String) {
-      await prefs.setString(key, value);
-    } else if (value is int) {
-      await prefs.setInt(key, value);
-    } else if (value is double) {
-      await prefs.setDouble(key, value);
-    }
-  }
-  */
 }

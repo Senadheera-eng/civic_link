@@ -174,7 +174,9 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
     setState(() => _isLoading = true);
 
     try {
-      await _issueService.submitIssue(
+      print("📝 Submitting issue...");
+
+      final issueId = await _issueService.submitIssue(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         category: _selectedCategory,
@@ -185,11 +187,17 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
         address: _address,
       );
 
+      print("✅ Issue submitted successfully with ID: $issueId");
+
       if (mounted) {
         _showSuccessSnackBar('Issue submitted successfully!');
-        Navigator.pop(context, true);
+        // Add a delay to ensure the success message is seen
+        await Future.delayed(const Duration(seconds: 1));
+        // Return true to indicate successful submission
+        Navigator.pop(context, true); // This is the key change!
       }
     } catch (e) {
+      print("❌ Failed to submit issue: $e");
       _showErrorSnackBar('Failed to submit issue: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -291,7 +299,7 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
                       child: Form(
                         key: _formKey,
                         child: SingleChildScrollView(
-                          physics: const BouncingScrollPhysics(),
+                          physics: const ClampingScrollPhysics(),
                           padding: const EdgeInsets.all(24),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
