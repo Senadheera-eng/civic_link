@@ -1,4 +1,4 @@
-// screens/home_screen.dart (COMPLETE WITH REAL-TIME UPDATES)
+// screens/home_screen.dart (UPDATED FOR 5 DEPARTMENTS)
 import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
 import 'package:civic_link/screens/notifications_screen.dart';
@@ -1286,43 +1286,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  // UPDATED: Map categories to new 5 departments
   LinearGradient _getGradientForCategory(String category) {
     switch (category) {
+      case 'Road and Transportation':
       case 'Road & Transportation':
-        return ModernTheme.accentGradient;
+        return ModernTheme.warningGradient;
+      case 'Water and Sewage':
       case 'Water & Sewerage':
         return ModernTheme.primaryGradient;
+      case 'Electricity and Power':
       case 'Electricity':
-        return ModernTheme.warningGradient;
+        return ModernTheme.accentGradient;
       case 'Public Safety':
         return ModernTheme.errorGradient;
-      case 'Waste Management':
+      case 'Environmental Issues':
         return ModernTheme.successGradient;
       default:
         return ModernTheme.accentGradient;
     }
   }
 
+  // UPDATED: Map icons to new 5 departments
   IconData _getCategoryIcon(String category) {
     switch (category) {
+      case 'Road and Transportation':
       case 'Road & Transportation':
         return Icons.construction;
+      case 'Water and Sewage':
       case 'Water & Sewerage':
         return Icons.water_drop;
+      case 'Electricity and Power':
       case 'Electricity':
         return Icons.electrical_services;
       case 'Public Safety':
         return Icons.security;
-      case 'Waste Management':
-        return Icons.delete;
-      case 'Parks & Recreation':
-        return Icons.park;
-      case 'Street Lighting':
-        return Icons.lightbulb;
-      case 'Public Buildings':
-        return Icons.business;
-      case 'Traffic Management':
-        return Icons.traffic;
       case 'Environmental Issues':
         return Icons.eco;
       default:
@@ -1365,6 +1363,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 }
+
 // Add these widget definitions at the bottom of your home_screen.dart file
 
 // ModernCard Widget
