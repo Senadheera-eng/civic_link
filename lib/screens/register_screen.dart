@@ -1,4 +1,4 @@
-// screens/register_screen.dart (ENHANCED WITH DEPARTMENT SELECTION)
+// screens/register_screen.dart (UPDATED WITH 5 DEPARTMENTS)
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
@@ -30,26 +30,8 @@ class _RegisterScreenState extends State<RegisterScreen>
   String _selectedUserType = 'citizen';
   String _selectedDepartment = '';
 
-  // Department list matching your issue categories
+  // Updated department list - reduced to 5 departments as requested
   final List<Map<String, dynamic>> _departments = [
-    {
-      'name': 'Road & Transportation',
-      'icon': Icons.construction,
-      'color': ModernTheme.warning,
-      'description': 'Roads, bridges, traffic systems',
-    },
-    {
-      'name': 'Water & Sewerage',
-      'icon': Icons.water_drop,
-      'color': ModernTheme.primaryBlue,
-      'description': 'Water supply, drainage, sewerage',
-    },
-    {
-      'name': 'Electricity',
-      'icon': Icons.electrical_services,
-      'color': ModernTheme.accent,
-      'description': 'Power supply, electrical infrastructure',
-    },
     {
       'name': 'Public Safety',
       'icon': Icons.security,
@@ -57,40 +39,28 @@ class _RegisterScreenState extends State<RegisterScreen>
       'description': 'Police, fire, emergency services',
     },
     {
-      'name': 'Waste Management',
-      'icon': Icons.delete,
-      'color': ModernTheme.success,
-      'description': 'Garbage collection, recycling',
+      'name': 'Electricity and Power',
+      'icon': Icons.electrical_services,
+      'color': ModernTheme.accent,
+      'description': 'Power supply, electrical infrastructure',
     },
     {
-      'name': 'Parks & Recreation',
-      'icon': Icons.park,
-      'color': Color(0xFF4CAF50),
-      'description': 'Parks, playgrounds, recreation facilities',
+      'name': 'Water and Sewage',
+      'icon': Icons.water_drop,
+      'color': ModernTheme.primaryBlue,
+      'description': 'Water supply, drainage, sewerage systems',
     },
     {
-      'name': 'Street Lighting',
-      'icon': Icons.lightbulb,
-      'color': Color(0xFFFFC107),
-      'description': 'Street lights, public lighting',
-    },
-    {
-      'name': 'Public Buildings',
-      'icon': Icons.business,
-      'color': Color(0xFF9C27B0),
-      'description': 'Government buildings, public facilities',
-    },
-    {
-      'name': 'Traffic Management',
-      'icon': Icons.traffic,
-      'color': Color(0xFFFF5722),
-      'description': 'Traffic signals, road signs',
+      'name': 'Road and Transportation',
+      'icon': Icons.construction,
+      'color': ModernTheme.warning,
+      'description': 'Roads, bridges, traffic systems',
     },
     {
       'name': 'Environmental Issues',
       'icon': Icons.eco,
-      'color': Color(0xFF8BC34A),
-      'description': 'Environmental protection, pollution',
+      'color': Color(0xFF4CAF50),
+      'description': 'Environmental protection, pollution control',
     },
   ];
 
@@ -888,6 +858,119 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Required supporting widgets
+class ModernCard extends StatelessWidget {
+  final Widget child;
+  final Color? color;
+  final BorderRadius? borderRadius;
+  final bool elevated;
+
+  const ModernCard({
+    Key? key,
+    required this.child,
+    this.color,
+    this.borderRadius,
+    this.elevated = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color ?? Theme.of(context).cardColor,
+        borderRadius: borderRadius ?? BorderRadius.circular(16),
+        boxShadow:
+            elevated
+                ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+                : null,
+      ),
+      child: Padding(padding: const EdgeInsets.all(20), child: child),
+    );
+  }
+}
+
+class GradientButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+  final bool isLoading;
+  final IconData? icon;
+  final LinearGradient gradient;
+  final double height;
+
+  const GradientButton({
+    Key? key,
+    required this.text,
+    required this.onPressed,
+    this.isLoading = false,
+    this.icon,
+    required this.gradient,
+    this.height = 48,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: gradient.colors.first.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: isLoading ? null : onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isLoading) ...[
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ] else if (icon != null) ...[
+                  Icon(icon, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

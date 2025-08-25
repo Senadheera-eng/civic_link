@@ -1,4 +1,4 @@
-// screens/login_screen.dart (FIXED SCROLLING + ENHANCED UI)
+// screens/login_screen.dart (FIXED - WITH MISSING WIDGETS)
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/modern_theme.dart';
@@ -535,6 +535,129 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// MISSING WIDGETS - Define them locally to fix the red underlines
+
+class ModernCard extends StatelessWidget {
+  final Widget child;
+  final Color? color;
+  final BorderRadius? borderRadius;
+  final bool elevated;
+
+  const ModernCard({
+    Key? key,
+    required this.child,
+    this.color,
+    this.borderRadius,
+    this.elevated = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color ?? Theme.of(context).cardColor,
+        borderRadius: borderRadius ?? BorderRadius.circular(16),
+        boxShadow:
+            elevated
+                ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+                : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+      ),
+      child: Padding(padding: const EdgeInsets.all(24), child: child),
+    );
+  }
+}
+
+class GradientButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+  final bool isLoading;
+  final IconData? icon;
+  final LinearGradient gradient;
+  final double height;
+  final double? width;
+
+  const GradientButton({
+    Key? key,
+    required this.text,
+    required this.onPressed,
+    this.isLoading = false,
+    this.icon,
+    required this.gradient,
+    this.height = 48,
+    this.width,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width ?? double.infinity,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: gradient.colors.first.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: isLoading ? null : onPressed,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isLoading) ...[
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ] else if (icon != null) ...[
+                  Icon(icon, color: Colors.white, size: 20),
+                  const SizedBox(width: 12),
+                ],
+                Text(
+                  isLoading ? 'Loading...' : text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
