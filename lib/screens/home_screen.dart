@@ -3,7 +3,8 @@ import 'package:civic_link/screens/issue_map_screen.dart';
 import 'package:civic_link/screens/my_issue_sreen.dart';
 import 'package:civic_link/screens/notifications_screen.dart';
 import 'package:civic_link/services/notification_service.dart';
-import 'package:civic_link/screens/setting_screen.dart';
+import 'package:civic_link/screens/setting_screen.dart'
+    hide ModernStatusChip, ModernCard;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1356,76 +1357,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 }
 // Add these widget definitions at the bottom of your home_screen.dart file
-
 // ModernCard Widget
-class ModernCard extends StatelessWidget {
-  final Widget child;
-  final VoidCallback? onTap;
-
-  const ModernCard({Key? key, required this.child, this.onTap})
-    : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child:
-          onTap != null
-              ? Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  onTap: onTap,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: child,
-                  ),
-                ),
-              )
-              : Padding(padding: const EdgeInsets.all(20), child: child),
-    );
-  }
-}
 
 // ModernStatusChip Widget
-class ModernStatusChip extends StatelessWidget {
-  final String text;
-  final Color color;
-
-  const ModernStatusChip({Key? key, required this.text, required this.color})
-    : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
-}
 
 // AnimatedCounter Widget
 class AnimatedCounter extends StatelessWidget {
@@ -1474,71 +1408,6 @@ class AnimatedCounter extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ],
-      ),
-    );
-  }
-}
-
-// GradientButton Widget
-class GradientButton extends StatelessWidget {
-  final String text;
-  final VoidCallback onPressed;
-  final IconData? icon;
-  final double? width;
-  final double? height;
-
-  const GradientButton({
-    Key? key,
-    required this.text,
-    required this.onPressed,
-    this.icon,
-    this.width,
-    this.height,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height ?? 48,
-      decoration: BoxDecoration(
-        gradient: ModernTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: ModernTheme.primaryBlue.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                ],
-                Text(
-                  text,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

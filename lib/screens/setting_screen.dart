@@ -1,11 +1,18 @@
-// screens/settings_screen.dart (FINAL FIXED VERSION)
+// screens/settings_screen.dart (ENHANCED PROFESSIONAL VERSION)
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:url_launcher/url_launcher_string.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:io';
 import '../services/auth_service.dart';
 import '../services/settings_service.dart';
 import '../models/user_model.dart';
 import '../theme/modern_theme.dart';
+import 'citizen_help_support_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -16,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     with TickerProviderStateMixin {
   final AuthService _authService = AuthService();
   final SettingsService _settingsService = SettingsService();
+  final ImagePicker _imagePicker = ImagePicker();
 
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
@@ -29,7 +37,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _emailNotifications = true;
   bool _pushNotifications = true;
   bool _locationEnabled = false;
-  bool _biometricEnabled = false;
   String _selectedLanguage = 'English';
   bool _isDarkMode = false;
   bool _soundEnabled = true;
@@ -51,6 +58,33 @@ class _SettingsScreenState extends State<SettingsScreen>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
     _fadeController.forward();
+  }
+
+  void _helpSupport() {
+    // Check if user is a citizen to show comprehensive help
+    if (_userData?.userType == 'citizen') {
+      // Navigate to the comprehensive Citizen Help & Support screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const CitizenHelpSupportScreen(),
+        ),
+      );
+    } else {
+      // For officials, show simple contact dialog
+      _showDialog(
+        'Help & Support',
+        'Need help? Contact our support team!\n\n'
+            '📧 Email: civiclink.official@gmail.com\n'
+            '📞 Phone: +1 (555) 123-4567\n'
+            '🌐 Website: www.civiclink.com\n\n'
+            'Business Hours:\n'
+            'Monday - Friday: 9:00 AM - 6:00 PM\n'
+            'Saturday: 10:00 AM - 4:00 PM\n'
+            'Sunday: Closed\n\n'
+            'For technical issues, please include your account type (Official) and department information.',
+      );
+    }
   }
 
   @override
@@ -81,7 +115,6 @@ class _SettingsScreenState extends State<SettingsScreen>
         _emailNotifications = prefs.getBool('email_notifications') ?? true;
         _pushNotifications = prefs.getBool('push_notifications') ?? true;
         _locationEnabled = prefs.getBool('location_enabled') ?? false;
-        _biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
 
         _isLoading = false;
       });
@@ -91,15 +124,23 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  Future<void> _updateUserProfile(String newName) async {
+  Future<void> _updateUserProfile(
+    String newName, {
+    String? profilePictureUrl,
+  }) async {
     setState(() => _isUpdating = true);
 
     try {
+      Map<String, dynamic> updateData = {'fullName': newName};
+      if (profilePictureUrl != null) {
+        updateData['profilePicture'] = profilePictureUrl;
+      }
+
       // Update in Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(_userData!.uid)
-          .update({'fullName': newName});
+          .update(updateData);
 
       // Update local userData
       setState(() {
@@ -108,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           email: _userData!.email,
           fullName: newName,
           userType: _userData!.userType,
-          profilePicture: _userData!.profilePicture,
+          profilePicture: profilePictureUrl ?? _userData!.profilePicture,
           createdAt: _userData!.createdAt,
         );
       });
@@ -116,6 +157,85 @@ class _SettingsScreenState extends State<SettingsScreen>
       _showSuccessSnackBar('Profile updated successfully!');
     } catch (e) {
       _showErrorSnackBar('Failed to update profile: $e');
+    } finally {
+      setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<String?> _uploadProfileImage(XFile imageFile) async {
+    try {
+      setState(() => _isUpdating = true);
+
+      final fileName =
+          'profile_${_userData!.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_images')
+          .child(fileName);
+
+      await ref.putFile(File(imageFile.path));
+      final downloadUrl = await ref.getDownloadURL();
+
+      return downloadUrl;
+    } catch (e) {
+      _showErrorSnackBar('Failed to upload image: $e');
+      return null;
+    } finally {
+      setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    try {
+      final XFile? imageFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 75,
+      );
+
+      if (imageFile != null) {
+        final downloadUrl = await _uploadProfileImage(imageFile);
+        if (downloadUrl != null) {
+          await _updateUserProfile(
+            _userData!.fullName,
+            profilePictureUrl: downloadUrl,
+          );
+        }
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to pick image: $e');
+    }
+  }
+
+  Future<void> _changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    setState(() => _isUpdating = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Re-authenticate user
+        final credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: currentPassword,
+        );
+
+        await user.reauthenticateWithCredential(credential);
+        await user.updatePassword(newPassword);
+
+        _showSuccessSnackBar('Password changed successfully!');
+      }
+    } catch (e) {
+      if (e.toString().contains('wrong-password')) {
+        _showErrorSnackBar('Current password is incorrect');
+      } else if (e.toString().contains('weak-password')) {
+        _showErrorSnackBar('New password is too weak');
+      } else {
+        _showErrorSnackBar('Failed to change password: $e');
+      }
     } finally {
       setState(() => _isUpdating = false);
     }
@@ -173,13 +293,418 @@ class _SettingsScreenState extends State<SettingsScreen>
       // Save privacy settings to SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('location_enabled', _locationEnabled);
-      await prefs.setBool('biometric_enabled', _biometricEnabled);
 
       _showSuccessSnackBar('Privacy settings updated!');
     } catch (e) {
       _showErrorSnackBar('Failed to update privacy settings: $e');
     } finally {
       setState(() => _isUpdating = false);
+    }
+  }
+
+  // Enhanced Contact Support Dialog
+  void _showContactSupportDialog() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            backgroundColor: Theme.of(context).cardColor,
+            title: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: ModernTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: ModernTheme.primaryBlue.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.headset_mic,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Text(
+                      'Contact Support',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        ModernTheme.primaryBlue.withOpacity(0.1),
+                        ModernTheme.primaryBlue.withOpacity(0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: ModernTheme.primaryBlue.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: ModernTheme.primaryBlue.withOpacity(0.2),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.email_outlined,
+                          size: 32,
+                          color: ModernTheme.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Need assistance?',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: ModernTheme.textPrimary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Our support team is here to help you with any questions or issues you may have.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: ModernTheme.textSecondary,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Contact Options
+                _buildContactOption(
+                  Icons.email,
+                  'Email Support',
+                  'civiclink.official@gmail.com',
+                  'Send us a detailed message',
+                  () {
+                    Navigator.pop(context);
+                    _launchEmailApp();
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildContactOption(
+                  Icons.schedule,
+                  'Response Time',
+                  '24 hours',
+                  'We typically respond within',
+                  null,
+                  isInfo: true,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _launchEmailApp();
+                },
+                icon: const Icon(Icons.email),
+                label: const Text('Email Us'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ModernTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildContactOption(
+    IconData icon,
+    String title,
+    String value,
+    String subtitle,
+    VoidCallback? onTap, {
+    bool isInfo = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color:
+            isInfo ? ModernTheme.success.withOpacity(0.1) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color:
+              isInfo
+                  ? ModernTheme.success.withOpacity(0.2)
+                  : Colors.grey.shade200,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color:
+                        isInfo ? ModernTheme.success : ModernTheme.primaryBlue,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: ModernTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color:
+                              isInfo
+                                  ? ModernTheme.success
+                                  : ModernTheme.primaryBlue,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: ModernTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (onTap != null)
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: ModernTheme.textSecondary,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Simple email launcher using url_launcher_string
+  Future<void> _launchEmailApp() async {
+    final String emailUrl =
+        'mailto:civiclink.official@gmail.com?subject=CivicLink Support Request&body=Hello CivicLink Support Team,%0D%0A%0D%0AI need assistance with:%0D%0A%0D%0A[Please describe your issue here]%0D%0A%0D%0AUser Details:%0D%0AAccount Type: ${_userData?.userType ?? 'Unknown'}%0D%0AEmail: ${_userData?.email ?? 'Unknown'}%0D%0A%0D%0AThank you!';
+
+    try {
+      bool launched = await launchUrlString(emailUrl);
+      if (launched) {
+        _showSuccessSnackBar('Opening email app...');
+      } else {
+        _showFallbackOptions();
+      }
+    } catch (e) {
+      print('Email launch failed: $e');
+      _showFallbackOptions();
+    }
+  }
+
+  // Fallback if email app doesn't open
+  void _showFallbackOptions() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            backgroundColor: Theme.of(context).cardColor,
+            title: const Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: ModernTheme.primaryBlue,
+                  size: 28,
+                ),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Email App Not Available',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'We couldn\'t open your email app automatically. Here\'s what you can do:',
+                  style: TextStyle(fontSize: 14, height: 1.4),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: ModernTheme.primaryBlue,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.email,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'civiclink.official@gmail.com',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: ModernTheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: ModernTheme.primaryBlue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Manual Steps:\n1. Copy the email address above\n2. Open your email app (Gmail, Outlook, etc.)\n3. Create a new email\n4. Paste our email address\n5. Describe your issue and send',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: ModernTheme.textSecondary,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _copyEmailToClipboard();
+                  Navigator.pop(context);
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy Email'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ModernTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // Copy email to clipboard
+  Future<void> _copyEmailToClipboard() async {
+    const String email = 'civiclink.official@gmail.com';
+
+    try {
+      await Clipboard.setData(const ClipboardData(text: email));
+      _showSuccessSnackBar('Email address copied to clipboard!');
+    } catch (e) {
+      _showErrorSnackBar('Failed to copy email address');
     }
   }
 
@@ -238,7 +763,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 8),
-                          _buildProfileSection(),
+                          _buildEnhancedProfileSection(),
                           const SizedBox(height: 32),
                           _buildAccountSettings(),
                           const SizedBox(height: 24),
@@ -248,7 +773,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           const SizedBox(height: 24),
                           _buildPrivacySettings(),
                           const SizedBox(height: 24),
-                          _buildAboutSection(),
+                          _buildEnhancedAboutSection(),
                           const SizedBox(height: 24),
                           _buildAccountManagement(),
                           const SizedBox(height: 40),
@@ -326,50 +851,122 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  Widget _buildProfileSection() {
+  Widget _buildEnhancedProfileSection() {
     return ModernCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Profile Information',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: ModernTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 20),
           Row(
             children: [
               Container(
-                width: 70,
-                height: 70,
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   gradient: ModernTheme.primaryGradient,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: ModernTheme.primaryBlue.withOpacity(0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Center(
-                  child: Text(
-                    _userData?.fullName.isNotEmpty == true
-                        ? _userData!.fullName[0].toUpperCase()
-                        : 'U',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                child: const Icon(Icons.person, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Profile Information',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.textPrimary,
                 ),
               ),
-              const SizedBox(width: 20),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Stack(
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: ModernTheme.primaryBlue.withOpacity(0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child:
+                          _userData?.profilePicture?.isNotEmpty == true
+                              ? Image.network(
+                                _userData!.profilePicture!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: ModernTheme.primaryGradient,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        _userData?.fullName.isNotEmpty == true
+                                            ? _userData!.fullName[0]
+                                                .toUpperCase()
+                                            : 'U',
+                                        style: const TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                              : Container(
+                                decoration: const BoxDecoration(
+                                  gradient: ModernTheme.primaryGradient,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    _userData?.fullName.isNotEmpty == true
+                                        ? _userData!.fullName[0].toUpperCase()
+                                        : 'U',
+                                    style: const TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: ModernTheme.primaryBlue,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: ModernTheme.primaryBlue.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 24),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,7 +974,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Text(
                       _userData?.fullName ?? 'User',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).textTheme.bodyLarge?.color,
                       ),
@@ -392,29 +989,96 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ).textTheme.bodyMedium?.color?.withOpacity(0.7),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    ModernStatusChip(
-                      text: _userData?.isAdmin == true ? 'ADMIN' : 'CITIZEN',
-                      color:
-                          _userData?.isAdmin == true
-                              ? ModernTheme.error
-                              : ModernTheme.accent,
-                      icon:
-                          _userData?.isAdmin == true
-                              ? Icons.admin_panel_settings
-                              : Icons.person,
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        ModernStatusChip(
+                          text: _userData?.userType?.toUpperCase() ?? 'USER',
+                          color:
+                              _userData?.userType == 'admin'
+                                  ? ModernTheme.error
+                                  : ModernTheme.accent,
+                          icon:
+                              _userData?.userType == 'admin'
+                                  ? Icons.admin_panel_settings
+                                  : Icons.person,
+                        ),
+                        const SizedBox(width: 8),
+                        if (_userData?.createdAt != null)
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: ModernTheme.success.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.schedule,
+                                    size: 12,
+                                    color: ModernTheme.success,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      'Member since ${DateTime.fromMillisecondsSinceEpoch(_userData!.createdAt!.millisecondsSinceEpoch).year}',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                        color: ModernTheme.success,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: ModernTheme.primaryBlue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed:
+                      _isUpdating ? null : _showEnhancedEditProfileDialog,
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Edit Profile'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ModernTheme.primaryBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
-                child: IconButton(
-                  icon: const Icon(Icons.edit, color: ModernTheme.primaryBlue),
-                  onPressed: _editProfile,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isUpdating ? null : _pickAndUploadImage,
+                  icon: const Icon(Icons.photo_camera, size: 18),
+                  label: const Text('Change Photo'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ModernTheme.primaryBlue,
+                    side: BorderSide(color: ModernTheme.primaryBlue),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -430,19 +1094,13 @@ class _SettingsScreenState extends State<SettingsScreen>
         icon: Icons.person_outline,
         title: 'Edit Profile',
         subtitle: 'Update your personal information',
-        onTap: _editProfile,
+        onTap: _showEnhancedEditProfileDialog,
       ),
       _buildSettingsTile(
         icon: Icons.lock_outline,
         title: 'Change Password',
         subtitle: 'Update your account password',
-        onTap: _changePassword,
-      ),
-      _buildSettingsTile(
-        icon: Icons.email_outlined,
-        title: 'Email Preferences',
-        subtitle: 'Manage email settings',
-        onTap: _emailPreferences,
+        onTap: _showEnhancedChangePasswordDialog,
       ),
     ]);
   }
@@ -530,32 +1188,16 @@ class _SettingsScreenState extends State<SettingsScreen>
           await _updatePrivacySettings();
         },
       ),
-      _buildSwitchTile(
-        icon: Icons.fingerprint,
-        title: 'Biometric Authentication',
-        subtitle: 'Use fingerprint or face unlock',
-        value: _biometricEnabled,
-        onChanged: (value) async {
-          setState(() => _biometricEnabled = value);
-          await _updatePrivacySettings();
-        },
-      ),
       _buildSettingsTile(
         icon: Icons.security,
         title: 'Privacy Policy',
         subtitle: 'Read our privacy policy',
-        onTap: _showPrivacyPolicy,
-      ),
-      _buildSettingsTile(
-        icon: Icons.download_outlined,
-        title: 'Export Data',
-        subtitle: 'Download your account data',
-        onTap: _exportData,
+        onTap: _showEnhancedPrivacyPolicy,
       ),
     ]);
   }
 
-  Widget _buildAboutSection() {
+  Widget _buildEnhancedAboutSection() {
     return _buildSection('About & Support', [
       _buildSettingsTile(
         icon: Icons.help_outline,
@@ -564,22 +1206,28 @@ class _SettingsScreenState extends State<SettingsScreen>
         onTap: _helpSupport,
       ),
       _buildSettingsTile(
+        icon: Icons.email_outlined,
+        title: 'Contact Support',
+        subtitle: 'Send email to our support team',
+        onTap: _showContactSupportDialog,
+      ),
+      _buildSettingsTile(
         icon: Icons.info_outline,
         title: 'About CivicLink',
         subtitle: 'App version and information',
-        onTap: _aboutApp,
+        onTap: _showEnhancedAboutApp,
       ),
       _buildSettingsTile(
-        icon: Icons.rate_review_outlined,
-        title: 'Rate App',
-        subtitle: 'Rate CivicLink on app store',
+        icon: Icons.feedback_outlined,
+        title: 'Send Feedback',
+        subtitle: 'Help us improve CivicLink',
+        onTap: _showFeedbackDialog,
+      ),
+      _buildSettingsTile(
+        icon: Icons.star_outline,
+        title: 'Rate CivicLink',
+        subtitle: 'Rate us on the app store',
         onTap: _rateApp,
-      ),
-      _buildSettingsTile(
-        icon: Icons.share_outlined,
-        title: 'Share App',
-        subtitle: 'Share CivicLink with friends',
-        onTap: _shareApp,
       ),
     ]);
   }
@@ -784,116 +1432,1136 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  // Action Methods
-  void _editProfile() {
-    _showEditProfileDialog();
-  }
+  // Enhanced Edit Profile Dialog
+  void _showEnhancedEditProfileDialog() {
+    final nameController = TextEditingController(text: _userData?.fullName);
+    final emailController = TextEditingController(text: _userData?.email);
 
-  void _changePassword() {
-    _showChangePasswordDialog();
-  }
-
-  void _emailPreferences() {
-    _showEmailPreferencesDialog();
-  }
-
-  void _showPrivacyPolicy() {
-    _showDialog(
-      'Privacy Policy',
-      'This is where the privacy policy content would be displayed. '
-          'In a real app, this would show the full privacy policy text or '
-          'open a web view with the privacy policy URL.\n\n'
-          'Your privacy is important to us. We collect only the necessary '
-          'information to provide our services and never share your personal '
-          'data with third parties without your consent.',
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            backgroundColor: Theme.of(context).cardColor,
+            title: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: ModernTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: ModernTheme.primaryBlue.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.edit,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Text(
+                      'Edit Profile',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          ModernTheme.primaryBlue.withOpacity(0.1),
+                          ModernTheme.primaryBlue.withOpacity(0.05),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: ModernTheme.primaryBlue.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Stack(
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: ModernTheme.primaryBlue.withOpacity(
+                                      0.3,
+                                    ),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child:
+                                    _userData?.profilePicture?.isNotEmpty ==
+                                            true
+                                        ? Image.network(
+                                          _userData!.profilePicture!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (
+                                            context,
+                                            error,
+                                            stackTrace,
+                                          ) {
+                                            return Container(
+                                              decoration: const BoxDecoration(
+                                                gradient:
+                                                    ModernTheme.primaryGradient,
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  _userData
+                                                              ?.fullName
+                                                              .isNotEmpty ==
+                                                          true
+                                                      ? _userData!.fullName[0]
+                                                          .toUpperCase()
+                                                      : 'U',
+                                                  style: const TextStyle(
+                                                    fontSize: 28,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        )
+                                        : Container(
+                                          decoration: const BoxDecoration(
+                                            gradient:
+                                                ModernTheme.primaryGradient,
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              _userData?.fullName.isNotEmpty ==
+                                                      true
+                                                  ? _userData!.fullName[0]
+                                                      .toUpperCase()
+                                                  : 'U',
+                                              style: const TextStyle(
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: GestureDetector(
+                                  onTap: _pickAndUploadImage,
+                                  child: Icon(
+                                    Icons.camera_alt,
+                                    color: ModernTheme.primaryBlue,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Tap camera icon to change photo',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: ModernTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Full Name',
+                        prefixIcon: Icon(
+                          Icons.person,
+                          color: ModernTheme.primaryBlue,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(16),
+                      ),
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: TextField(
+                      controller: emailController,
+                      decoration: const InputDecoration(
+                        labelText: 'Email Address',
+                        prefixIcon: Icon(Icons.email, color: Colors.grey),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(16),
+                        helperText: 'Email cannot be changed',
+                        helperStyle: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                      enabled: false,
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final newName = nameController.text.trim();
+                  if (newName.isNotEmpty && newName != _userData?.fullName) {
+                    Navigator.pop(context);
+                    await _updateUserProfile(newName);
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ModernTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Save Changes'),
+              ),
+            ],
+          ),
     );
   }
 
-  void _exportData() {
-    _showDialog(
-      'Export Data',
-      'Your data export will be prepared and sent to your email address. '
-          'This may take a few minutes to process.\n\n'
-          'The export will include:\n'
-          '• Profile information\n'
-          '• Reported issues\n'
-          '• App settings\n'
-          '• Activity history',
-      showActions: true,
-      confirmText: 'Export',
-      onConfirm: () async {
-        try {
-          final settings = _settingsService.exportSettings();
-          _showSuccessSnackBar('Data export initiated! Check your email.');
-        } catch (e) {
-          _showErrorSnackBar('Failed to export data: $e');
-        }
-      },
+  // Enhanced Change Password Dialog
+  void _showEnhancedChangePasswordDialog() {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
+    bool obscureCurrentPassword = true;
+    bool obscureNewPassword = true;
+    bool obscureConfirmPassword = true;
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setState) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  backgroundColor: Theme.of(context).cardColor,
+                  title: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: ModernTheme.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: ModernTheme.primaryBlue.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.lock,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        const Expanded(
+                          child: Text(
+                            'Change Password',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: ModernTheme.primaryBlue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: ModernTheme.primaryBlue.withOpacity(0.2),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: ModernTheme.primaryBlue,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'For security, you need to enter your current password to make changes.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: ModernTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: TextField(
+                            controller: currentPasswordController,
+                            obscureText: obscureCurrentPassword,
+                            decoration: InputDecoration(
+                              labelText: 'Current Password',
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                color: ModernTheme.primaryBlue,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  obscureCurrentPassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    obscureCurrentPassword =
+                                        !obscureCurrentPassword;
+                                  });
+                                },
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.all(16),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: TextField(
+                            controller: newPasswordController,
+                            obscureText: obscureNewPassword,
+                            decoration: InputDecoration(
+                              labelText: 'New Password',
+                              prefixIcon: const Icon(
+                                Icons.lock,
+                                color: ModernTheme.primaryBlue,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  obscureNewPassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    obscureNewPassword = !obscureNewPassword;
+                                  });
+                                },
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.all(16),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          child: TextField(
+                            controller: confirmPasswordController,
+                            obscureText: obscureConfirmPassword,
+                            decoration: InputDecoration(
+                              labelText: 'Confirm New Password',
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                color: ModernTheme.primaryBlue,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  obscureConfirmPassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    obscureConfirmPassword =
+                                        !obscureConfirmPassword;
+                                  });
+                                },
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.all(16),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: ModernTheme.success.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Password Requirements:',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: ModernTheme.success,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                '• At least 8 characters long\n• Include uppercase and lowercase letters\n• Include at least one number\n• Include at least one special character',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: ModernTheme.success,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final currentPassword =
+                            currentPasswordController.text.trim();
+                        final newPassword = newPasswordController.text.trim();
+                        final confirmPassword =
+                            confirmPasswordController.text.trim();
+
+                        if (currentPassword.isEmpty ||
+                            newPassword.isEmpty ||
+                            confirmPassword.isEmpty) {
+                          _showErrorSnackBar('All fields are required');
+                          return;
+                        }
+
+                        if (newPassword != confirmPassword) {
+                          _showErrorSnackBar('New passwords do not match');
+                          return;
+                        }
+
+                        if (newPassword.length < 8) {
+                          _showErrorSnackBar(
+                            'Password must be at least 8 characters long',
+                          );
+                          return;
+                        }
+
+                        Navigator.pop(context);
+                        await _changePassword(currentPassword, newPassword);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ModernTheme.primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Change Password'),
+                    ),
+                  ],
+                ),
+          ),
     );
   }
 
-  void _helpSupport() {
-    _showDialog(
-      'Help & Support',
-      'Need help? We\'re here for you!\n\n'
-          '📧 Email: support@civiclink.com\n'
-          '📞 Phone: +1 (555) 123-4567\n'
-          '🌐 Website: www.civiclink.com\n\n'
-          'Business Hours:\n'
-          'Monday - Friday: 9:00 AM - 6:00 PM\n'
-          'Saturday: 10:00 AM - 4:00 PM\n'
-          'Sunday: Closed\n\n'
-          'You can also visit our website for FAQs and documentation.',
+  // Enhanced Privacy Policy Dialog
+  void _showEnhancedPrivacyPolicy() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            backgroundColor: Theme.of(context).cardColor,
+            title: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: ModernTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: ModernTheme.primaryBlue.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.security,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Text(
+                      'Privacy Policy',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            ModernTheme.primaryBlue.withOpacity(0.1),
+                            ModernTheme.primaryBlue.withOpacity(0.05),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: ModernTheme.primaryBlue.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.shield,
+                            color: ModernTheme.primaryBlue,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Your privacy is our priority. We are committed to protecting your personal information.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: ModernTheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    _buildPrivacySection(
+                      'Information We Collect',
+                      '• Personal information (name, email address)\n• Location data (when you report issues)\n• Device information and app usage data\n• Content you create (issue reports, comments)',
+                      Icons.info_outline,
+                    ),
+
+                    _buildPrivacySection(
+                      'How We Use Your Information',
+                      '• To provide and improve our services\n• To process and respond to your reports\n• To send important notifications\n• To ensure app security and prevent fraud',
+                      Icons.build,
+                    ),
+
+                    _buildPrivacySection(
+                      'Information Sharing',
+                      '• We do not sell your personal information\n• We may share data with government authorities for issue resolution\n• We use secure third-party services (Firebase, etc.)\n• Anonymous usage statistics may be shared',
+                      Icons.share,
+                    ),
+
+                    _buildPrivacySection(
+                      'Data Security',
+                      '• End-to-end encryption for sensitive data\n• Regular security audits and updates\n• Secure cloud storage with Firebase\n• Limited access to authorized personnel only',
+                      Icons.lock,
+                    ),
+
+                    _buildPrivacySection(
+                      'Your Rights',
+                      '• Access your personal data anytime\n• Request data correction or deletion\n• Control notification preferences\n• Opt-out of non-essential data collection',
+                      Icons.person_outline,
+                    ),
+
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: ModernTheme.success.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: ModernTheme.success.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.update,
+                                color: ModernTheme.success,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Last Updated: August 2025',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: ModernTheme.success,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'We may update this policy from time to time. We will notify you of any significant changes.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: ModernTheme.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _launchUrlString('https://civiclink.com/privacy');
+                },
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Full Policy'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ModernTheme.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
     );
   }
 
-  void _aboutApp() {
-    _showDialog(
-      'About CivicLink',
-      'CivicLink v1.0.0\n\n'
-          '🏛️ Report. Track. Resolve.\n\n'
-          'CivicLink helps citizens report community issues and track their resolution. '
-          'Built with Flutter and Firebase for a seamless experience.\n\n'
-          '✨ Features:\n'
-          '• Report community issues\n'
-          '• Track issue status\n'
-          '• Location-based mapping\n'
-          '• Real-time notifications\n'
-          '• Admin dashboard\n\n'
-          '© 2025 CivicLink Team\n'
-          'Made with ❤️ for better communities',
+  Widget _buildPrivacySection(String title, String content, IconData icon) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: ModernTheme.primaryBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(icon, color: ModernTheme.primaryBlue, size: 16),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Text(
+              content,
+              style: const TextStyle(
+                fontSize: 13,
+                color: ModernTheme.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Enhanced About App Dialog
+  void _showEnhancedAboutApp() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            backgroundColor: Theme.of(context).cardColor,
+            contentPadding: EdgeInsets.zero,
+            content: Container(
+              width: double.maxFinite,
+              constraints: BoxConstraints(
+                maxHeight:
+                    MediaQuery.of(context).size.height *
+                    0.8, // Limit height to 80% of screen
+              ),
+              child: SingleChildScrollView(
+                physics: ClampingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with gradient
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(24),
+                      decoration: const BoxDecoration(
+                        gradient: ModernTheme.primaryGradient,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.location_city,
+                              size: 40,
+                              color: ModernTheme.primaryBlue,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'CivicLink',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const Text(
+                            'Version 1.0.0',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              '🏛️ Report. Track. Resolve.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Content
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'About CivicLink',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: ModernTheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: ModernTheme.primaryBlue.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: ModernTheme.primaryBlue.withOpacity(0.1),
+                              ),
+                            ),
+                            child: const Text(
+                              'CivicLink bridges the gap between citizens and local authorities, making community problem-solving efficient and transparent. Report issues, track progress, and help build better communities.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: ModernTheme.textSecondary,
+                                height: 1.5,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          _buildFeatureItem(
+                            Icons.report_problem,
+                            'Smart Issue Reporting',
+                            'Report community problems with photos and location data',
+                          ),
+                          _buildFeatureItem(
+                            Icons.track_changes,
+                            'Real-time Tracking',
+                            'Monitor the progress of your reported issues',
+                          ),
+                          _buildFeatureItem(
+                            Icons.map,
+                            'Interactive Maps',
+                            'Visualize community issues on detailed maps',
+                          ),
+                          _buildFeatureItem(
+                            Icons.notifications_active,
+                            'Instant Notifications',
+                            'Get updates when issues are resolved',
+                          ),
+                          _buildFeatureItem(
+                            Icons.dashboard,
+                            'Admin Dashboard',
+                            'Comprehensive management tools for authorities',
+                          ),
+
+                          const SizedBox(height: 20),
+                          const Center(
+                            child: Text(
+                              '© 2025 CivicLink Team\nMade with ❤️ for better communities',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: ModernTheme.textSecondary,
+                                height: 1.4,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildFeatureItem(IconData icon, String title, String description) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: ModernTheme.primaryBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: ModernTheme.primaryBlue, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: ModernTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: ModernTheme.textSecondary,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Additional new methods
+  void _showFeedbackDialog() {
+    final feedbackController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.feedback, color: ModernTheme.primaryBlue),
+                SizedBox(width: 12),
+                Text('Send Feedback'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Help us improve CivicLink! Your feedback is valuable to us.',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: feedbackController,
+                  decoration: const InputDecoration(
+                    hintText:
+                        'Share your thoughts, suggestions, or report bugs...',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 4,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _launchEmailApp();
+                  _showSuccessSnackBar('Opening email to send feedback...');
+                },
+                child: const Text('Send Feedback'),
+              ),
+            ],
+          ),
     );
   }
 
   void _rateApp() {
-    _showDialog(
-      'Rate CivicLink',
-      '⭐ Enjoying CivicLink?\n\n'
-          'Your feedback helps us improve and reach more communities! '
-          'Would you like to rate us on the app store?\n\n'
-          'It only takes a minute and really helps other users discover our app.',
-      showActions: true,
-      confirmText: 'Rate Now',
-      onConfirm: () {
-        _showSuccessSnackBar('Redirecting to app store...');
-      },
+    // Simulate app store rating
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.star, color: Colors.orange),
+                SizedBox(width: 12),
+                Text('Rate CivicLink'),
+              ],
+            ),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Enjoying CivicLink? Please take a moment to rate us on the app store!',
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.star, color: Colors.orange, size: 30),
+                    Icon(Icons.star, color: Colors.orange, size: 30),
+                    Icon(Icons.star, color: Colors.orange, size: 30),
+                    Icon(Icons.star, color: Colors.orange, size: 30),
+                    Icon(Icons.star, color: Colors.orange, size: 30),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Maybe Later'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showSuccessSnackBar('Thank you for your support!');
+                },
+                child: const Text('Rate Now'),
+              ),
+            ],
+          ),
     );
   }
 
-  void _shareApp() {
-    _showDialog(
-      'Share CivicLink',
-      '📢 Help spread the word!\n\n'
-          'Share CivicLink with your friends and family to help build '
-          'stronger communities together.\n\n'
-          '\"Check out CivicLink - an amazing app for reporting and tracking '
-          'community issues! Download it now and help make our neighborhood better.\"',
-      showActions: true,
-      confirmText: 'Share',
-      onConfirm: () {
-        _showSuccessSnackBar('Opening share dialog...');
-      },
-    );
+  // Action Methods
+  void _editProfile() {
+    _showEnhancedEditProfileDialog();
   }
 
   void _signOut() async {
@@ -937,195 +2605,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       onConfirm: () {
         _showDialog(
           'Account Deletion',
-          'Account deletion is a permanent action. To proceed, please contact our support team at support@civiclink.com with your deletion request.\n\n'
+          'Account deletion is a permanent action. To proceed, please contact our support team at civiclink.official@gmail.com with your deletion request.\n\n'
               'We\'ll process your request within 48 hours and send you a confirmation email.',
         );
       },
-    );
-  }
-
-  // Dialog Methods
-  void _showEditProfileDialog() {
-    final nameController = TextEditingController(text: _userData?.fullName);
-    final emailController = TextEditingController(text: _userData?.email);
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text('Edit Profile'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Full Name',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
-                    helperText: 'Email cannot be changed',
-                  ),
-                  enabled: false,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  final newName = nameController.text.trim();
-                  if (newName.isNotEmpty && newName != _userData?.fullName) {
-                    Navigator.pop(context);
-                    await _updateUserProfile(newName);
-                  } else {
-                    Navigator.pop(context);
-                  }
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  void _showChangePasswordDialog() {
-    final currentPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text('Change Password'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: currentPasswordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Current Password',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
-                  ),
-                  obscureText: true,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: newPasswordController,
-                  decoration: const InputDecoration(
-                    labelText: 'New Password',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock_outline),
-                  ),
-                  obscureText: true,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: confirmPasswordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm New Password',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock_outline),
-                  ),
-                  obscureText: true,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showSuccessSnackBar('Password changed successfully!');
-                },
-                child: const Text('Change Password'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  void _showEmailPreferencesDialog() {
-    bool issueUpdates = true;
-    bool weeklyDigest = false;
-    bool promotionalEmails = false;
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setState) => AlertDialog(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  title: const Text('Email Preferences'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SwitchListTile(
-                        title: const Text('Issue Updates'),
-                        subtitle: const Text(
-                          'Get notified about your reported issues',
-                        ),
-                        value: issueUpdates,
-                        onChanged:
-                            (value) => setState(() => issueUpdates = value),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Weekly Digest'),
-                        subtitle: const Text('Summary of community activities'),
-                        value: weeklyDigest,
-                        onChanged:
-                            (value) => setState(() => weeklyDigest = value),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Promotional Emails'),
-                        subtitle: const Text('News and feature updates'),
-                        value: promotionalEmails,
-                        onChanged:
-                            (value) =>
-                                setState(() => promotionalEmails = value),
-                      ),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _showSuccessSnackBar('Email preferences updated!');
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ],
-                ),
-          ),
     );
   }
 
@@ -1223,70 +2706,12 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
     );
   }
-}
 
-// Supporting classes (use your existing ones, but here are fallbacks if needed)
-class ModernCard extends StatelessWidget {
-  final Widget child;
-
-  const ModernCard({Key? key, required this.child}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-}
-
-class ModernStatusChip extends StatelessWidget {
-  final String text;
-  final Color color;
-  final IconData icon;
-
-  const ModernStatusChip({
-    Key? key,
-    required this.text,
-    required this.color,
-    required this.icon,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _launchUrlString(String url) async {
+    try {
+      await launchUrlString(url);
+    } catch (e) {
+      _showErrorSnackBar('Could not open link');
+    }
   }
 }

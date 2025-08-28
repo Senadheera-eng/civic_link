@@ -1,4 +1,7 @@
 // screens/department_dashboard.dart (REORGANIZED VERSION)
+import 'package:civic_link/models/notification_model.dart';
+import 'package:civic_link/screens/department_notifications_screen.dart';
+import 'package:civic_link/services/notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/auth_service.dart';
@@ -59,6 +62,349 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     super.initState();
     _initAnimations();
     _loadData();
+  }
+
+  Widget _buildNotificationCenter() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: ModernCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.accentGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_active,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Text(
+                    'Department Notifications',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: ModernTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                StreamBuilder<List<NotificationModel>>(
+                  stream: NotificationService().getUserNotificationsStream(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const SizedBox.shrink();
+
+                    final unreadCount =
+                        snapshot.data!.where((n) => !n.isRead).length;
+                    if (unreadCount == 0) return const SizedBox.shrink();
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: ModernTheme.error,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _openDepartmentNotifications,
+                  child: const Text('View All'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            StreamBuilder<List<NotificationModel>>(
+              stream: NotificationService().getUserNotificationsStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Text(
+                    'No notifications yet',
+                    style: TextStyle(color: ModernTheme.textSecondary),
+                  );
+                }
+
+                // Filter for department-relevant notifications
+                final departmentNotifications =
+                    snapshot.data!
+                        .where(
+                          (notification) =>
+                              notification.type == 'citizen_manual_reminder' ||
+                              notification.type == 'citizen_followup' ||
+                              notification.type == 'department_reminder',
+                        )
+                        .take(3)
+                        .toList();
+
+                if (departmentNotifications.isEmpty) {
+                  return const Text(
+                    'No department notifications',
+                    style: TextStyle(color: ModernTheme.textSecondary),
+                  );
+                }
+
+                return Column(
+                  children:
+                      departmentNotifications
+                          .map(
+                            (notification) =>
+                                _buildQuickNotificationItem(notification),
+                          )
+                          .toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ADD THIS METHOD to your existing _DepartmentDashboardState class
+  Widget _buildQuickNotificationItem(NotificationModel notification) {
+    final canReply = notification.data['canReply'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color:
+            notification.isRead
+                ? ModernTheme.surfaceVariant
+                : ModernTheme.primaryBlue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color:
+              notification.isRead
+                  ? ModernTheme.textTertiary.withOpacity(0.2)
+                  : ModernTheme.primaryBlue.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                _getNotificationTypeIcon(notification.type),
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  notification.title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight:
+                        notification.isRead ? FontWeight.w500 : FontWeight.bold,
+                    color: ModernTheme.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                notification.timeAgo,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: ModernTheme.textTertiary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            notification.body,
+            style: const TextStyle(
+              fontSize: 13,
+              color: ModernTheme.textSecondary,
+              height: 1.3,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (canReply) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => _showQuickReplyDialog(notification),
+                  icon: const Icon(Icons.reply, size: 16),
+                  label: const Text('Quick Reply'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: ModernTheme.primaryBlue,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ADD THESE METHODS to your existing _DepartmentDashboardState class
+  void _openDepartmentNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const DepartmentNotificationsScreen(),
+      ),
+    );
+  }
+
+  void _showQuickReplyDialog(NotificationModel notification) {
+    final messageController = TextEditingController();
+    final issueTitle = notification.data['issueTitle'] ?? 'Issue';
+    final citizenName =
+        notification.data['citizenName'] ??
+        notification.data['senderName'] ??
+        'Citizen';
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.reply, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Quick Reply')),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reply to: $citizenName',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: ModernTheme.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Regarding: $issueTitle',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: ModernTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: messageController,
+                  decoration: const InputDecoration(
+                    labelText: 'Your Reply',
+                    hintText: 'Type your response...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  if (messageController.text.trim().isNotEmpty) {
+                    try {
+                      await NotificationService().sendDepartmentReplyToCitizen(
+                        issueId: notification.data['issueId'] ?? '',
+                        citizenId:
+                            notification.data['citizenId'] ??
+                            notification.data['senderId'] ??
+                            '',
+                        replyMessage: messageController.text.trim(),
+                        officialName:
+                            _userData?.fullName ?? 'Department Official',
+                        department: _userData?.department ?? 'Department',
+                        originalNotificationId: notification.id,
+                      );
+
+                      Navigator.pop(context);
+                      _showSuccessSnackBar('Reply sent to citizen!');
+
+                      // Mark the original notification as read
+                      await NotificationService().markAsRead(notification.id);
+                    } catch (e) {
+                      _showErrorSnackBar('Failed to send reply: $e');
+                    }
+                  }
+                },
+                icon: const Icon(Icons.send),
+                label: const Text('Send Reply'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  String _getNotificationTypeIcon(String type) {
+    switch (type) {
+      case 'citizen_manual_reminder':
+        return '🔔';
+      case 'citizen_followup':
+        return '💬';
+      case 'department_reminder':
+        return '⏰';
+      default:
+        return '📢';
+    }
   }
 
   void _initAnimations() {
@@ -701,6 +1047,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                             averageResolutionTime: _averageResolutionTime,
                             assignedToMeCount: _assignedToMeCount,
                           ),
+                          _buildNotificationCenter(),
                         ],
                       ),
                     ),
