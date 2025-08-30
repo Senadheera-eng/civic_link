@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../theme/modern_theme.dart';
 import '../../screens/official_settings_screen.dart';
+import '../../screens/admin_help_support_screen.dart';
 
 class DepartmentHeader extends StatelessWidget {
   final UserModel? userData;
@@ -116,7 +117,7 @@ class DepartmentHeader extends StatelessWidget {
                           _showProfileDialog(context);
                           break;
                         case 'help':
-                          _showHelpDialog(context);
+                          _navigateToHelpSupport(context);
                           break;
                         case 'logout':
                           onSignOut();
@@ -291,40 +292,10 @@ class DepartmentHeader extends StatelessWidget {
     );
   }
 
-  void _showHelpDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text('Help & Support'),
-            content: const Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Need help? Here are some resources:'),
-                SizedBox(height: 16),
-                Text(
-                  '• Use the filter tabs to navigate between issue categories',
-                ),
-                Text('• Tap on any issue to view details and take action'),
-                Text('• Use the Manage button for bulk operations'),
-                Text('• Check Analytics for performance insights'),
-                SizedBox(height: 16),
-                Text(
-                  'For technical support, contact your system administrator.',
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Got it'),
-              ),
-            ],
-          ),
+  void _navigateToHelpSupport(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AdminHelpSupportScreen()),
     );
   }
 
