@@ -1,4 +1,4 @@
-// screens/login_screen.dart (FIXED - WITH MISSING WIDGETS)
+// screens/login_screen.dart (ENHANCED UI - MORE ATTRACTIVE & COLORFUL)
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/modern_theme.dart';
@@ -18,8 +18,10 @@ class _LoginScreenState extends State<LoginScreen>
 
   late AnimationController _fadeController;
   late AnimationController _slideController;
+  late AnimationController _pulseController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  late Animation<double> _pulseAnimation;
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -39,18 +41,28 @@ class _LoginScreenState extends State<LoginScreen>
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
 
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.3),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
 
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.1).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     _fadeController.forward();
     _slideController.forward();
+    _pulseController.repeat(reverse: true);
   }
 
   @override
@@ -59,6 +71,7 @@ class _LoginScreenState extends State<LoginScreen>
     _passwordController.dispose();
     _fadeController.dispose();
     _slideController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -68,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      print("🔐 LoginScreen: Starting sign in attempt");
+      print("🔍 LoginScreen: Starting sign in attempt");
       print("📧 Email: ${_emailController.text}");
 
       // Clear any existing auth state
@@ -173,7 +186,13 @@ class _LoginScreenState extends State<LoginScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [ModernTheme.gradientStart, ModernTheme.gradientEnd],
+            colors: [
+              Color(0xFF667eea), // Vibrant purple-blue
+              Color(0xFF764ba2), // Deep purple
+              Color(0xFFf093fb), // Soft pink
+              Color(0xFFf5576c), // Coral red
+            ],
+            stops: [0.0, 0.3, 0.7, 1.0],
           ),
         ),
         child: SafeArea(
@@ -186,9 +205,9 @@ class _LoginScreenState extends State<LoginScreen>
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 30),
                     _buildLogo(),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 50),
                     _buildLoginForm(),
                     const SizedBox(height: 32),
                     _buildRegisterLink(),
@@ -206,54 +225,96 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _buildLogo() {
     return Column(
       children: [
-        Hero(
-          tag: 'app_logo',
-          child: Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
+        ScaleTransition(
+          scale: _pulseAnimation,
+          child: Hero(
+            tag: 'app_logo',
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFFFFD700), // Gold
+                    Color(0xFFFF6B6B), // Coral
+                  ],
                 ),
-              ],
-            ),
-            child: const Icon(
-              Icons.location_city,
-              size: 50,
-              color: ModernTheme.primaryBlue,
+                borderRadius: BorderRadius.circular(35),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                  ),
+                  BoxShadow(
+                    color: Color(0xFFFFD700).withOpacity(0.5),
+                    blurRadius: 20,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.location_city,
+                size: 60,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 30),
         const Text(
           'CivicLink',
           style: TextStyle(
-            fontSize: 36,
-            fontWeight: FontWeight.bold,
+            fontSize: 42,
+            fontWeight: FontWeight.w900,
             color: Colors.white,
-            letterSpacing: -1,
+            letterSpacing: -1.5,
+            shadows: [
+              Shadow(
+                offset: Offset(0, 4),
+                blurRadius: 8,
+                color: Colors.black26,
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withOpacity(0.3),
+                Colors.white.withOpacity(0.1),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.4),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
           ),
           child: const Text(
             'Report. Track. Resolve.',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               color: Colors.white,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              shadows: [
+                Shadow(
+                  offset: Offset(0, 2),
+                  blurRadius: 4,
+                  color: Colors.black26,
+                ),
+              ],
             ),
           ),
         ),
@@ -264,7 +325,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _buildLoginForm() {
     return ModernCard(
       elevated: true,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(28),
       child: Form(
         key: _formKey,
         child: Column(
@@ -272,165 +333,243 @@ class _LoginScreenState extends State<LoginScreen>
             const Text(
               'Welcome Back!',
               style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
                 color: ModernTheme.textPrimary,
-                letterSpacing: -0.5,
+                letterSpacing: -1.0,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Sign in to continue reporting and tracking issues',
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 16,
                 color: ModernTheme.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.center,
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 32),
 
-            // Email Field
-            TextFormField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              style: const TextStyle(fontSize: 16),
-              decoration: InputDecoration(
-                labelText: 'Email Address',
-                hintText: 'Enter your email',
-                prefixIcon: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+            // Email Field with Enhanced Design
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF667eea).withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  child: const Icon(
-                    Icons.email_outlined,
-                    color: ModernTheme.primaryBlue,
-                    size: 20,
+                ],
+              ),
+              child: TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  hintText: 'Enter your email',
+                  filled: true,
+                  fillColor: const Color(0xFFF8F9FF),
+                  prefixIcon: Container(
+                    margin: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.email_outlined,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF667eea),
+                      width: 2,
+                    ),
                   ),
                 ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your email';
+                  }
+                  if (!RegExp(
+                    r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                  ).hasMatch(value)) {
+                    return 'Please enter a valid email';
+                  }
+                  return null;
+                },
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your email';
-                }
-                if (!RegExp(
-                  r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                ).hasMatch(value)) {
-                  return 'Please enter a valid email';
-                }
-                return null;
-              },
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
 
-            // Password Field
-            TextFormField(
-              controller: _passwordController,
-              obscureText: _obscurePassword,
-              style: const TextStyle(fontSize: 16),
-              decoration: InputDecoration(
-                labelText: 'Password',
-                hintText: 'Enter your password',
-                prefixIcon: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+            // Password Field with Enhanced Design
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF764ba2).withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  child: const Icon(
-                    Icons.lock_outline,
-                    color: ModernTheme.primaryBlue,
-                    size: 20,
-                  ),
-                ),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                    color: ModernTheme.textSecondary,
-                  ),
-                  onPressed:
-                      () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
-                ),
+                ],
               ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your password';
-                }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
-                return null;
-              },
+              child: TextFormField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  hintText: 'Enter your password',
+                  filled: true,
+                  fillColor: const Color(0xFFF8F9FF),
+                  prefixIcon: Container(
+                    margin: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF764ba2), Color(0xFFf093fb)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.lock_outline,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                      color: const Color(0xFF764ba2),
+                    ),
+                    onPressed:
+                        () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF764ba2),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your password';
+                  }
+                  if (value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                  }
+                  return null;
+                },
+              ),
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 32),
 
-            // Sign In Button
+            // Enhanced Sign In Button
             GradientButton(
               text: 'Sign In',
               onPressed: _signIn,
               isLoading: _isLoading,
               icon: Icons.login,
-              gradient: ModernTheme.primaryGradient,
-              height: 52,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+              ),
+              height: 56,
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
-            // Divider
+            // Enhanced Divider
             Row(
               children: [
                 Expanded(
                   child: Container(
-                    height: 1,
-                    color: ModernTheme.textTertiary.withOpacity(0.3),
+                    height: 2,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          ModernTheme.textTertiary.withOpacity(0.3),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
                     'OR',
                     style: TextStyle(
                       color: ModernTheme.textSecondary,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 2,
+                      fontSize: 14,
                     ),
                   ),
                 ),
                 Expanded(
                   child: Container(
-                    height: 1,
-                    color: ModernTheme.textTertiary.withOpacity(0.3),
+                    height: 2,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          ModernTheme.textTertiary.withOpacity(0.3),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
-            // Google Sign In Button
+            // Enhanced Google Sign In Button
             Container(
               width: double.infinity,
-              height: 52,
+              height: 56,
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: ModernTheme.textTertiary.withOpacity(0.3),
-                  width: 1.5,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFf093fb), Color(0xFFf5576c)],
                 ),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
+                    color: const Color(0xFFf093fb).withOpacity(0.4),
+                    blurRadius: 15,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
@@ -446,13 +585,13 @@ class _LoginScreenState extends State<LoginScreen>
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: ModernTheme.error.withOpacity(0.1),
+                          color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(
                           Icons.login,
-                          color: ModernTheme.error,
-                          size: 20,
+                          color: Colors.white,
+                          size: 22,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -461,8 +600,8 @@ class _LoginScreenState extends State<LoginScreen>
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: ModernTheme.textPrimary,
-                          letterSpacing: 0.3,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ],
@@ -477,9 +616,25 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildRegisterLink() {
-    return ModernCard(
-      color: Colors.white.withOpacity(0.15),
-      borderRadius: BorderRadius.circular(20),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.2),
+            Colors.white.withOpacity(0.1),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -487,7 +642,7 @@ class _LoginScreenState extends State<LoginScreen>
             "Don't have an account? ",
             style: TextStyle(
               color: Colors.white,
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -517,19 +672,27 @@ class _LoginScreenState extends State<LoginScreen>
               );
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.3)),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFD700), Color(0xFFFF6B6B)],
+                ),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFFD700).withOpacity(0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: const Text(
                 'Sign Up',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  letterSpacing: 0.5,
+                  fontSize: 16,
+                  letterSpacing: 0.8,
                 ),
               ),
             ),
@@ -560,26 +723,31 @@ class ModernCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: color ?? Theme.of(context).cardColor,
+        color: color ?? Colors.white,
         borderRadius: borderRadius ?? BorderRadius.circular(16),
         boxShadow:
             elevated
                 ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFF667eea).withOpacity(0.1),
                     blurRadius: 20,
-                    offset: const Offset(0, 8),
+                    offset: const Offset(0, 5),
                   ),
                 ]
                 : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 15,
+                    offset: const Offset(0, 8),
                   ),
                 ],
       ),
-      child: Padding(padding: const EdgeInsets.all(24), child: child),
+      child: Padding(padding: const EdgeInsets.all(28), child: child),
     );
   }
 }
@@ -614,9 +782,9 @@ class GradientButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: gradient.colors.first.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: gradient.colors.first.withOpacity(0.4),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -633,16 +801,16 @@ class GradientButton extends StatelessWidget {
               children: [
                 if (isLoading) ...[
                   const SizedBox(
-                    width: 20,
-                    height: 20,
+                    width: 22,
+                    height: 22,
                     child: CircularProgressIndicator(
                       color: Colors.white,
-                      strokeWidth: 2,
+                      strokeWidth: 2.5,
                     ),
                   ),
                   const SizedBox(width: 12),
                 ] else if (icon != null) ...[
-                  Icon(icon, color: Colors.white, size: 20),
+                  Icon(icon, color: Colors.white, size: 22),
                   const SizedBox(width: 12),
                 ],
                 Text(
@@ -651,7 +819,7 @@ class GradientButton extends StatelessWidget {
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                    letterSpacing: 0.8,
                   ),
                 ),
               ],
