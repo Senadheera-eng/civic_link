@@ -560,7 +560,7 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 1.2,
+            childAspectRatio: 1.1,
           ),
           itemCount: IssueCategories.categories.length,
           itemBuilder: (context, index) {
@@ -598,12 +598,13 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
                           : null,
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12), // Reduced from 16
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min, // Added to prevent overflow
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(10), // Reduced from 12
                         decoration: BoxDecoration(
                           color:
                               isSelected
@@ -615,10 +616,12 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
                         ),
                         child: Text(
                           IssueCategories.getIcon(category),
-                          style: const TextStyle(fontSize: 24),
+                          style: const TextStyle(
+                            fontSize: 20,
+                          ), // Reduced from 24
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8), // Reduced from 12
                       Text(
                         category,
                         style: TextStyle(
@@ -627,24 +630,27 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
                                   ? Colors.white
                                   : ModernTheme.textPrimary,
                           fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                          fontSize: 12, // Reduced from 13
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (isSelected) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          IssueCategories.getDescription(category),
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
+                        const SizedBox(height: 2), // Reduced from 4
+                        Flexible(
+                          // Added Flexible to prevent overflow
+                          child: Text(
+                            IssueCategories.getDescription(category),
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 9, // Reduced from 10
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ],
