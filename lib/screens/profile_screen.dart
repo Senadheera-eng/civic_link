@@ -58,7 +58,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     });
 
-    // 🔄 Fetch report count
     final reportsQuery =
         await FirebaseFirestore.instance
             .collection('issues')
@@ -153,103 +152,160 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color.fromARGB(255, 240, 241, 245),
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(160),
+        preferredSize: const Size.fromHeight(180),
         child: Container(
-          padding: const EdgeInsets.only(top: 50, left: 20, right: 20),
+          padding: const EdgeInsets.only(
+            top: 50,
+            left: 20,
+            right: 20,
+            bottom: 20,
+          ),
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               colors: [Color(0xFF2962FF), Color(0xFF448AFF)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(20),
-              bottomRight: Radius.circular(20),
+              bottomLeft: Radius.circular(30),
+              bottomRight: Radius.circular(30),
             ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'My Profile',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
               ),
-              const Padding(
-                padding: EdgeInsets.only(left: 12.0, top: 4),
-                child: Text(
-                  'Manage your personal info',
-                  style: TextStyle(fontSize: 14, color: Colors.white70),
+              const SizedBox(height: 10),
+              const Text(
+                'My Profile',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Manage your personal info',
+                style: TextStyle(fontSize: 16, color: Colors.white70),
               ),
             ],
           ),
         ),
       ),
-
       body:
           user == null
               ? const Center(child: Text('User not logged in'))
               : SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 8,
+                  vertical: 20,
                 ),
-                child: Container(
-                  margin: const EdgeInsets.only(top: 16),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 60,
-                              backgroundImage:
-                                  _image != null
-                                      ? FileImage(_image!)
-                                      : const AssetImage(
-                                            'assets/images/user.jpg',
-                                          )
-                                          as ImageProvider,
+                child: Column(
+                  children: [
+                    Center(
+                      child: Stack(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF2962FF), Color(0xFF448AFF)],
+                              ),
                             ),
-                            Positioned(
-                              bottom: 0,
-                              right: 4,
-                              child: InkWell(
-                                onTap: _showEditOptions,
-                                child: const CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: Colors.blue,
-                                  child: Icon(
-                                    Icons.edit,
-                                    size: 18,
-                                    color: Colors.white,
+                            child: CircleAvatar(
+                              radius: 60,
+                              backgroundColor:
+                                  _image == null
+                                      ? const Color(0xFF2962FF)
+                                      : null,
+                              backgroundImage:
+                                  _image != null ? FileImage(_image!) : null,
+                              child:
+                                  _image == null
+                                      ? Text(
+                                        userName.isNotEmpty
+                                            ? userName[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          fontSize: 40,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                      : null,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 4,
+                            right: 8,
+                            child: InkWell(
+                              onTap: _showEditOptions,
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white,
+                                ),
+                                padding: const EdgeInsets.all(6),
+                                child: const Icon(
+                                  Icons.edit,
+                                  color: Colors.blue,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      elevation: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Full Name",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: _nameController,
+                              decoration: InputDecoration(
+                                hintText: 'Enter your name',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: ElevatedButton.icon(
+                                onPressed: _saveName,
+                                icon: const Icon(Icons.save, size: 18),
+                                label: const Text("Save"),
+                                style: ElevatedButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 10,
                                   ),
                                 ),
                               ),
@@ -257,120 +313,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 30),
+                    ),
+                    const SizedBox(height: 20),
 
-                      // Name + Save Button
-                      Row(
-                        children: [
-                          const Icon(Icons.person, color: Colors.blue),
-                          const SizedBox(width: 8),
-                          const Text(
-                            "Name",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                    _buildInfoTile(Icons.email, "Email", email),
+                    _buildInfoTile(Icons.verified_user, "Role", role),
+                    _buildInfoTile(
+                      Icons.calendar_today,
+                      "Joined Date",
+                      joinedDate,
+                    ),
+                    _buildInfoTile(
+                      Icons.analytics,
+                      "Reports Submitted",
+                      "$reportsSubmitted reports",
+                    ),
+                    const SizedBox(height: 20),
+
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: ListTile(
+                        leading: const Icon(Icons.lock, color: Colors.blue),
+                        title: const Text("Change Password"),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder:
+                                  (context) => const ChangePasswordScreen(),
                             ),
-                          ),
-                          const Spacer(),
-                          ElevatedButton(
-                            onPressed: _saveName,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              textStyle: const TextStyle(fontSize: 14),
-                            ),
-                            child: const Text('Save'),
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Enter your name',
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-
-                      // Email
-                      _buildInfoRow(
-                        Icons.email,
-                        'Email',
-                        Text(email, style: const TextStyle(fontSize: 18)),
-                      ),
-                      const SizedBox(height: 25),
-
-                      // Role
-                      _buildInfoRow(
-                        Icons.verified_user,
-                        'Role',
-                        Text(role, style: const TextStyle(fontSize: 18)),
-                      ),
-                      const SizedBox(height: 25),
-
-                      // Joined Date
-                      _buildInfoRow(
-                        Icons.calendar_today,
-                        'Joined Date',
-                        Text(joinedDate, style: const TextStyle(fontSize: 18)),
-                      ),
-                      const SizedBox(height: 25),
-
-                      // Reports
-                      _buildInfoRow(
-                        Icons.analytics,
-                        'Reports Submitted',
-                        Text(
-                          '$reportsSubmitted reports',
-                          style: const TextStyle(fontSize: 18),
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-
-                      // Change Password
-                      _buildInfoRow(
-                        Icons.lock,
-                        'Change Password',
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder:
-                                    (context) => const ChangePasswordScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text('Change Password'),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, Widget content) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: Colors.blue),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ],
+  Widget _buildInfoTile(IconData icon, String label, String value) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.blue),
+        title: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey,
+          ),
         ),
-        const SizedBox(height: 6),
-        content,
-      ],
+        subtitle: Text(
+          value,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
     );
   }
 }
