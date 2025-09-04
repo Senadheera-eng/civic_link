@@ -1,4 +1,3 @@
-// widgets/department/management_options_modal.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -10,12 +9,14 @@ class ManagementOptionsModal extends StatelessWidget {
   final UserModel? userData;
   final List<IssueModel> departmentIssues;
   final VoidCallback onRefresh;
+  final BuildContext parentContext;
 
   const ManagementOptionsModal({
     Key? key,
     required this.userData,
     required this.departmentIssues,
     required this.onRefresh,
+    required this.parentContext,
   }) : super(key: key);
 
   @override
@@ -202,7 +203,7 @@ class ManagementOptionsModal extends StatelessWidget {
             actions: [
               TextButton(
                 child: const Text("Close"),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.of(parentContext).pop(),
               ),
             ],
           ),
@@ -217,10 +218,13 @@ class ManagementOptionsModal extends StatelessWidget {
             .toList();
 
     if (pendingIssues.isEmpty) {
-      _showErrorSnackBar(
-        context,
-        'No pending issues available for bulk actions',
-      );
+      // Always use parentContext for snackbars
+      Future.delayed(Duration.zero, () {
+        _showErrorSnackBar(
+          parentContext,
+          'No pending issues available for bulk actions',
+        );
+      });
       return;
     }
 
@@ -233,7 +237,7 @@ class ManagementOptionsModal extends StatelessWidget {
             actions: [
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.of(parentContext).pop(); // Close dialog
                   _performBulkStatusUpdate(
                     context,
                     pendingIssues.map((e) => e.id).toList(),
@@ -244,7 +248,7 @@ class ManagementOptionsModal extends StatelessWidget {
                 child: const Text('Mark All In Progress'),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.of(parentContext).pop(),
                 child: const Text('Cancel'),
               ),
             ],
@@ -264,7 +268,10 @@ class ManagementOptionsModal extends StatelessWidget {
             .toList();
 
     if (unassignedIssues.isEmpty) {
-      _showErrorSnackBar(context, 'No unassigned issues available');
+      // Always use parentContext for snackbars
+      Future.delayed(Duration.zero, () {
+        _showErrorSnackBar(parentContext, 'No unassigned issues available');
+      });
       return;
     }
 
@@ -277,13 +284,13 @@ class ManagementOptionsModal extends StatelessWidget {
             actions: [
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.of(parentContext).pop();
                   _assignIssuesToSelf(context, unassignedIssues);
                 },
                 child: const Text('Assign All to Me'),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.of(parentContext).pop(),
                 child: const Text('Cancel'),
               ),
             ],
@@ -302,10 +309,11 @@ class ManagementOptionsModal extends StatelessWidget {
             title: const Text("Team Management"),
             content: SizedBox(
               width: 350,
-              height: 400,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
+                  SizedBox(
+                    height: 250,
                     child: StreamBuilder<QuerySnapshot>(
                       stream:
                           FirebaseFirestore.instance
@@ -316,11 +324,18 @@ class ManagementOptionsModal extends StatelessWidget {
                               )
                               .snapshots(),
                       builder: (ctx, snapshot) {
-                        if (!snapshot.hasData) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const Center(
                             child: CircularProgressIndicator(),
                           );
                         }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Center(
+                            child: Text("No team members found."),
+                          );
+                        }
+
                         final users = snapshot.data!.docs;
                         return ListView.builder(
                           itemCount: users.length,
@@ -328,7 +343,7 @@ class ManagementOptionsModal extends StatelessWidget {
                             final user = users[i];
                             return ListTile(
                               leading: const Icon(Icons.person),
-                              title: Text(user['displayName']),
+                              title: Text(user['displayName'] ?? 'Unnamed'),
                               trailing: IconButton(
                                 icon: const Icon(
                                   Icons.delete,
@@ -347,6 +362,7 @@ class ManagementOptionsModal extends StatelessWidget {
                       },
                     ),
                   ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -361,14 +377,30 @@ class ManagementOptionsModal extends StatelessWidget {
                         icon: const Icon(Icons.add, color: Colors.green),
                         onPressed: () async {
                           if (controller.text.isNotEmpty) {
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .add({
-                                  'displayName': controller.text,
-                                  'departmentId': userData?.department,
-                                  'createdAt': FieldValue.serverTimestamp(),
-                                });
-                            controller.clear();
+                            try {
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .add({
+                                    'displayName': controller.text.trim(),
+                                    'departmentId': userData?.department,
+                                    'role': 'member',
+                                    'email': '',
+                                    'createdAt': FieldValue.serverTimestamp(),
+                                  });
+                              controller.clear();
+
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Member added successfully"),
+                                ),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                SnackBar(
+                                  content: Text("Failed to add member: $e"),
+                                ),
+                              );
+                            }
                           }
                         },
                       ),
@@ -377,6 +409,12 @@ class ManagementOptionsModal extends StatelessWidget {
                 ],
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(parentContext).pop(),
+                child: const Text("Close"),
+              ),
+            ],
           ),
     );
   }
@@ -400,13 +438,22 @@ class ManagementOptionsModal extends StatelessWidget {
         });
       }
       await batch.commit();
-      _showSuccessSnackBar(context, '${issueIds.length} issues updated');
+      // Show snackbar after closing modal
+      Future.delayed(Duration.zero, () {
+        _showSuccessSnackBar(
+          parentContext,
+          '${issueIds.length} issues updated',
+        );
+      });
       onRefresh();
     } catch (e) {
-      _showErrorSnackBar(context, 'Failed: $e');
+      Future.delayed(Duration.zero, () {
+        _showErrorSnackBar(parentContext, 'Failed: $e');
+      });
     }
   }
 
+  // ...existing code...
   Future<void> _assignIssuesToSelf(
     BuildContext context,
     List<IssueModel> issues,
@@ -425,13 +472,15 @@ class ManagementOptionsModal extends StatelessWidget {
               'assignedAt': FieldValue.serverTimestamp(),
             });
       }
-      _showSuccessSnackBar(context, '${issues.length} issues assigned');
+      _showSuccessSnackBar(parentContext, '${issues.length} issues assigned');
+      Navigator.of(parentContext).pop(); // Close the modal/dialog
       onRefresh();
     } catch (e) {
-      _showErrorSnackBar(context, 'Failed: $e');
+      _showErrorSnackBar(parentContext, 'Failed: $e');
     }
   }
 
+  // ...existing code...
   // 🔹 Snackbars
   void _showSuccessSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(

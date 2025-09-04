@@ -30,7 +30,7 @@ class _AdminHelpSupportScreenState extends State<AdminHelpSupportScreen>
         preferredSize: const Size.fromHeight(140), // adjust AppBar height
         child: AppBar(
           title: const Text(
-            "Help & User Guide",
+            "Help & Admin Guide",
             style: TextStyle(
               fontSize: 25, // change size here
               fontWeight: FontWeight.bold,

@@ -725,10 +725,11 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:
-          (context) => ManagementOptionsModal(
+          (modalContext) => ManagementOptionsModal(
             userData: _userData,
             departmentIssues: _departmentIssues,
             onRefresh: _loadData,
+            parentContext: context, // <-- Pass parent context here
           ),
     );
   }
