@@ -64,6 +64,49 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     _loadData();
   }
 
+  Widget _buildCategoryCard({
+    required String title,
+    required int count,
+    required Color color,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.15), // light background tint
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              "$count",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildNotificationCenter() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -875,33 +918,19 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
                     decoration: BoxDecoration(
-                      gradient:
-                          isSelected
-                              ? LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [tabColor, tabColor.withOpacity(0.8)],
-                              )
-                              : null,
-                      color: isSelected ? null : ModernTheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color:
-                            isSelected
-                                ? Colors.transparent
-                                : tabColor.withOpacity(0.3),
-                        width: 2,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [tabColor, tabColor.withOpacity(0.85)],
                       ),
-                      boxShadow:
-                          isSelected
-                              ? [
-                                BoxShadow(
-                                  color: tabColor.withOpacity(0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ]
-                              : null,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: tabColor.withOpacity(isSelected ? 0.9 : 0.3),
+                          blurRadius: isSelected ? 18 : 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -913,7 +942,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                             children: [
                               Icon(
                                 tab['icon'] as IconData,
-                                color: isSelected ? Colors.white : tabColor,
+                                color: Colors.white,
                                 size: 24,
                               ),
                               const SizedBox(width: 8),
@@ -923,16 +952,13 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color:
-                                      isSelected
-                                          ? Colors.white.withOpacity(0.2)
-                                          : tabColor.withOpacity(0.1),
+                                  color: Colors.white.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
                                   count.toString(),
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.white : tabColor,
+                                  style: const TextStyle(
+                                    color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
                                   ),
@@ -943,11 +969,8 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                           const SizedBox(height: 8),
                           Text(
                             tab['label'] as String,
-                            style: TextStyle(
-                              color:
-                                  isSelected
-                                      ? Colors.white
-                                      : ModernTheme.textPrimary,
+                            style: const TextStyle(
+                              color: Colors.white,
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
                             ),
