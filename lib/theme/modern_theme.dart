@@ -45,6 +45,9 @@ class ModernTheme {
     BoxShadow(color: Color(0x1A000000), blurRadius: 20, offset: Offset(0, 8)),
     BoxShadow(color: Color(0x0F000000), blurRadius: 6, offset: Offset(0, 2)),
   ];
+  static Color get primary => primaryBlue;
+  static Color get primaryContainer => const Color(0xFFDDE7FF);
+  static Color get onPrimary => Colors.white;
 
   static ThemeData get lightTheme {
     return ThemeData(
