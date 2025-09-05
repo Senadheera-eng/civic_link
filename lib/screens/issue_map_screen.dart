@@ -1,4 +1,4 @@
-// screens/issue_map_screen.dart (FIXED VERSION - Crash Issues Resolved)
+// screens/issue_map_screen.dart (BLUE BACKGROUND FIXED)
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -30,7 +30,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
   LatLng? _selectedLocation;
   bool _isLoading = true;
   bool _isGettingLocation = false;
-  bool _isDisposed = false; // ADDED: Track disposal state
+  bool _isDisposed = false;
 
   // UI State
   bool _showMapView = false;
@@ -62,13 +62,12 @@ class _IssueMapScreenState extends State<IssueMapScreen>
 
   @override
   void dispose() {
-    _isDisposed = true; // ADDED: Mark as disposed
+    _isDisposed = true;
     _fadeController.dispose();
     _mapController?.dispose();
     super.dispose();
   }
 
-  // FIXED: Added safety checks for mounted state
   void _safeSetState(VoidCallback callback) {
     if (mounted && !_isDisposed) {
       setState(callback);
@@ -79,16 +78,12 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     _safeSetState(() => _isLoading = true);
 
     try {
-      // Load user's current location
       await _getCurrentLocation();
 
-      // Check if still mounted after async operation
       if (!mounted || _isDisposed) return;
 
-      // Load all issues
       final issues = await _issueService.getAllIssues();
 
-      // Check if still mounted after async operation
       if (!mounted || _isDisposed) return;
 
       _safeSetState(() {
@@ -96,8 +91,14 @@ class _IssueMapScreenState extends State<IssueMapScreen>
         _isLoading = false;
       });
 
-      // Filter nearby issues and update map markers
-      await _filterNearbyIssues();
+      if (!_showMapView) {
+        await _filterNearbyIssues();
+      } else {
+        _safeSetState(() {
+          _nearbyIssues = _allIssues;
+        });
+      }
+
       await _updateMapMarkers();
     } catch (e) {
       if (mounted && !_isDisposed) {
@@ -130,12 +131,9 @@ class _IssueMapScreenState extends State<IssueMapScreen>
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(
-          seconds: 10,
-        ), // ADDED: Timeout to prevent hanging
+        timeLimit: const Duration(seconds: 10),
       );
 
-      // Check if still mounted after async operation
       if (!mounted || _isDisposed) return;
 
       _safeSetState(() {
@@ -150,7 +148,6 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     }
   }
 
-  // FIXED: Made async and added safety checks
   Future<void> _filterNearbyIssues() async {
     if (_allIssues.isEmpty || (!mounted || _isDisposed)) return;
 
@@ -187,7 +184,6 @@ class _IssueMapScreenState extends State<IssueMapScreen>
       }
     }
 
-    // Filter by category if not 'All'
     if (_selectedCategory != 'All') {
       filteredIssues =
           filteredIssues
@@ -195,7 +191,6 @@ class _IssueMapScreenState extends State<IssueMapScreen>
               .toList();
     }
 
-    // Sort by distance (nearest first)
     filteredIssues.sort((a, b) {
       try {
         double distanceA = Geolocator.distanceBetween(
@@ -212,7 +207,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
         );
         return distanceA.compareTo(distanceB);
       } catch (e) {
-        return 0; // Keep original order if comparison fails
+        return 0;
       }
     });
 
@@ -223,15 +218,15 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     }
   }
 
-  // FIXED: Made async and added safety checks
   Future<void> _updateMapMarkers() async {
     if (_mapController == null || (!mounted || _isDisposed)) return;
 
     try {
       Set<Marker> markers = {};
 
-      // Add issue markers
-      for (var issue in _nearbyIssues) {
+      final issuesToShow = _showMapView ? _nearbyIssues : _nearbyIssues;
+
+      for (var issue in issuesToShow) {
         try {
           markers.add(
             Marker(
@@ -242,7 +237,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
               ),
               infoWindow: InfoWindow(
                 title: issue.title,
-                snippet: issue.category,
+                snippet: '${issue.category} • ${issue.status.toUpperCase()}',
                 onTap: () {
                   if (mounted && !_isDisposed) {
                     Navigator.push(
@@ -262,7 +257,6 @@ class _IssueMapScreenState extends State<IssueMapScreen>
         }
       }
 
-      // Add current location marker
       if (_currentLocation != null) {
         markers.add(
           Marker(
@@ -274,12 +268,14 @@ class _IssueMapScreenState extends State<IssueMapScreen>
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueBlue,
             ),
-            infoWindow: const InfoWindow(title: 'Your Location'),
+            infoWindow: const InfoWindow(
+              title: '📍 You are here',
+              snippet: 'Your current location',
+            ),
           ),
         );
       }
 
-      // Add selected location marker
       if (_selectedLocation != null) {
         markers.add(
           Marker(
@@ -288,7 +284,10 @@ class _IssueMapScreenState extends State<IssueMapScreen>
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueViolet,
             ),
-            infoWindow: const InfoWindow(title: 'Selected Location'),
+            infoWindow: const InfoWindow(
+              title: '📌 Selected Location',
+              snippet: 'Tap to find nearby issues',
+            ),
           ),
         );
       }
@@ -318,7 +317,6 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     }
   }
 
-  // FIXED: Added safety checks
   void _onMapTap(LatLng location) {
     if (!mounted || _isDisposed) return;
 
@@ -333,7 +331,6 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     _showSuccessSnackBar('Location selected! Showing nearby issues.');
   }
 
-  // FIXED: Added safety checks
   void _moveToCurrentLocation() {
     if (_currentLocation != null &&
         _mapController != null &&
@@ -359,26 +356,52 @@ class _IssueMapScreenState extends State<IssueMapScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: _showMapView ? _buildMapView() : _buildListView(),
+      backgroundColor: Colors.white, // FIXED: White background instead of blue
+      body: Column(
+        children: [
+          // Header with blue gradient (only the header)
+          SafeArea(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: ModernTheme.primaryGradient,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Issue Map',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+
+          // Rest of the content with white background
+          Expanded(child: _showMapView ? _buildMapView() : _buildListView()),
+        ],
       ),
     );
   }
 
   Widget _buildListView() {
     return Column(
-      children: [
-        _buildHeader(),
-        _buildViewToggle(),
-        _buildFilters(),
-        _buildIssuesList(),
-      ],
+      children: [_buildViewToggle(), _buildFilters(), _buildIssuesList()],
     );
   }
 
@@ -390,7 +413,16 @@ class _IssueMapScreenState extends State<IssueMapScreen>
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Loading map...'),
+            Text(
+              'Getting your location...',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Please allow location access to view the map',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       );
@@ -398,30 +430,42 @@ class _IssueMapScreenState extends State<IssueMapScreen>
 
     return Column(
       children: [
-        _buildHeader(),
         _buildViewToggle(),
         _buildFilters(),
 
-        // Map Instructions
+        // Map Info Card
         Container(
-          margin: const EdgeInsets.all(16),
+          margin: const EdgeInsets.symmetric(horizontal: 16),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             gradient: ModernTheme.accentGradient,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.touch_app, color: Colors.white, size: 20),
-              SizedBox(width: 12),
+              const Icon(Icons.location_on, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Tap anywhere on the map to select a location and find nearby issues!',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Interactive Map View',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '🔵 Your location  🔴 Pending  🟡 In Progress  🟢 Resolved',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -440,10 +484,10 @@ class _IssueMapScreenState extends State<IssueMapScreen>
             ),
             clipBehavior: Clip.hardEdge,
             child: GoogleMap(
-              onMapCreated: (GoogleMapController controller) {
+              onMapCreated: (GoogleMapController controller) async {
                 if (mounted && !_isDisposed) {
                   _mapController = controller;
-                  _updateMapMarkers();
+                  await _updateMapMarkers();
                 }
               },
               initialCameraPosition: CameraPosition(
@@ -451,45 +495,46 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                   _currentLocation!.latitude,
                   _currentLocation!.longitude,
                 ),
-                zoom: 14.0,
+                zoom: 13.0,
               ),
               markers: _markers,
               onTap: _onMapTap,
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
-              zoomControlsEnabled: false,
+              zoomControlsEnabled: true,
               mapToolbarEnabled: false,
+              compassEnabled: true,
+              mapType: MapType.normal,
             ),
           ),
         ),
 
-        // Issues count and location button
+        // Status Bar
         Container(
           margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: ModernTheme.cardShadow,
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  gradient: ModernTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${_nearbyIssues.length} Issues Found',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+              Text(
+                '${_nearbyIssues.length} Issues Found',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
               ),
-              FloatingActionButton.small(
-                onPressed: _moveToCurrentLocation,
-                backgroundColor: ModernTheme.primary,
-                child: const Icon(Icons.my_location, color: Colors.white),
+              Text(
+                'Radius: ${_radiusKm.toInt()}km',
+                style: TextStyle(
+                  color: ModernTheme.textSecondary,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -498,34 +543,9 @@ class _IssueMapScreenState extends State<IssueMapScreen>
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          const Expanded(
-            child: Text(
-              'Issue Map',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildViewToggle() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: ModernTheme.surface,
         borderRadius: BorderRadius.circular(16),
@@ -544,12 +564,6 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(16),
                     bottomLeft: Radius.circular(16),
-                  ),
-                  border: Border.all(
-                    color:
-                        !_showMapView
-                            ? Colors.transparent
-                            : ModernTheme.textTertiary.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
@@ -589,12 +603,6 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                   borderRadius: const BorderRadius.only(
                     topRight: Radius.circular(16),
                     bottomRight: Radius.circular(16),
-                  ),
-                  border: Border.all(
-                    color:
-                        _showMapView
-                            ? Colors.transparent
-                            : ModernTheme.textTertiary.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
@@ -708,14 +716,14 @@ class _IssueMapScreenState extends State<IssueMapScreen>
               Icon(
                 Icons.location_off,
                 size: 64,
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.grey.withOpacity(0.5),
               ),
               const SizedBox(height: 16),
               Text(
                 'No issues found nearby',
                 style: TextStyle(
                   fontSize: 18,
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.grey.withOpacity(0.8),
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -724,7 +732,7 @@ class _IssueMapScreenState extends State<IssueMapScreen>
                 'Try increasing the search radius or changing location',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.grey.withOpacity(0.6),
                 ),
                 textAlign: TextAlign.center,
               ),
