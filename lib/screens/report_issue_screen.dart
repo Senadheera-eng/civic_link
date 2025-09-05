@@ -1,4 +1,4 @@
-// screens/modern_report_issue_screen.dart
+// screens/modern_report_issue_screen.dart (UPDATED FOR 5 DEPARTMENTS - ERROR FREE)
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -191,11 +191,10 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
 
       if (mounted) {
         _showSuccessSnackBar('Issue submitted successfully!');
-
-        // 🔁 Add slight delay to allow Firestore to sync
-        await Future.delayed(const Duration(milliseconds: 300));
-
-        Navigator.pop(context, true); // ✅ Trigger home screen refresh
+        // Add a delay to ensure the success message is seen
+        await Future.delayed(const Duration(seconds: 1));
+        // Return true to indicate successful submission
+        Navigator.pop(context, true);
       }
     } catch (e) {
       print("❌ Failed to submit issue: $e");
@@ -256,11 +255,30 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
                 onPressed: () => Navigator.pop(context, false),
                 child: const Text('Cancel'),
               ),
-              GradientButton(
-                text: 'Continue',
-                onPressed: () => Navigator.pop(context, true),
+              Container(
                 width: 100,
                 height: 40,
+                decoration: BoxDecoration(
+                  gradient: ModernTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context, true),
+                    borderRadius: BorderRadius.circular(8),
+                    child: const Center(
+                      child: Text(
+                        'Continue',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -397,7 +415,7 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
   }
 
   Widget _buildLocationStatus() {
-    return ModernCard(
+    return _ModernCard(
       color:
           _currentLocation != null
               ? ModernTheme.success.withOpacity(0.1)
@@ -527,55 +545,120 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
             color: ModernTheme.textPrimary,
           ),
         ),
+        const SizedBox(height: 8),
+        const Text(
+          'Select the department that can help resolve this issue',
+          style: TextStyle(fontSize: 14, color: ModernTheme.textSecondary),
+        ),
         const SizedBox(height: 16),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children:
-              IssueCategories.categories.map((category) {
-                final isSelected = _selectedCategory == category;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedCategory = category),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: isSelected ? ModernTheme.primaryGradient : null,
-                      color: isSelected ? null : ModernTheme.surfaceVariant,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color:
-                            isSelected
-                                ? Colors.transparent
-                                : ModernTheme.textTertiary.withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          IssueCategories.categoryIcons[category] ?? '📝',
-                          style: const TextStyle(fontSize: 16),
+
+        // Enhanced category grid layout
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.1,
+          ),
+          itemCount: IssueCategories.categories.length,
+          itemBuilder: (context, index) {
+            final category = IssueCategories.categories[index];
+            final isSelected = _selectedCategory == category;
+
+            return GestureDetector(
+              onTap: () => setState(() => _selectedCategory = category),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient:
+                      isSelected ? _getGradientForCategory(category) : null,
+                  color: isSelected ? null : ModernTheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color:
+                        isSelected
+                            ? Colors.transparent
+                            : Color(
+                              IssueCategories.getColorValue(category),
+                            ).withOpacity(0.3),
+                    width: isSelected ? 0 : 1.5,
+                  ),
+                  boxShadow:
+                      isSelected
+                          ? [
+                            BoxShadow(
+                              color: Color(
+                                IssueCategories.getColorValue(category),
+                              ).withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ]
+                          : null,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12), // Reduced from 16
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min, // Added to prevent overflow
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10), // Reduced from 12
+                        decoration: BoxDecoration(
+                          color:
+                              isSelected
+                                  ? Colors.white.withOpacity(0.2)
+                                  : Color(
+                                    IssueCategories.getColorValue(category),
+                                  ).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          category,
-                          style: TextStyle(
-                            color:
-                                isSelected
-                                    ? Colors.white
-                                    : ModernTheme.textPrimary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
+                        child: Text(
+                          IssueCategories.getIcon(category),
+                          style: const TextStyle(
+                            fontSize: 20,
+                          ), // Reduced from 24
+                        ),
+                      ),
+                      const SizedBox(height: 8), // Reduced from 12
+                      Text(
+                        category,
+                        style: TextStyle(
+                          color:
+                              isSelected
+                                  ? Colors.white
+                                  : ModernTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12, // Reduced from 13
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (isSelected) ...[
+                        const SizedBox(height: 2), // Reduced from 4
+                        Flexible(
+                          // Added Flexible to prevent overflow
+                          child: Text(
+                            IssueCategories.getDescription(category),
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 9, // Reduced from 10
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
-                );
-              }).toList(),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -598,29 +681,18 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
           children:
               IssuePriorities.priorities.map((priority) {
                 final isSelected = _selectedPriority == priority;
-                Color priorityColor;
-                switch (priority.toLowerCase()) {
-                  case 'low':
-                    priorityColor = ModernTheme.success;
-                    break;
-                  case 'medium':
-                    priorityColor = ModernTheme.warning;
-                    break;
-                  case 'high':
-                    priorityColor = ModernTheme.error;
-                    break;
-                  case 'critical':
-                    priorityColor = const Color(0xFFDC2626);
-                    break;
-                  default:
-                    priorityColor = ModernTheme.textSecondary;
-                }
+                final priorityColor = Color(
+                  IssuePriorities.getColorValue(priority),
+                );
 
                 return Expanded(
                   child: GestureDetector(
                     onTap: () => setState(() => _selectedPriority = priority),
                     child: Container(
-                      margin: const EdgeInsets.only(right: 8),
+                      margin: EdgeInsets.only(
+                        right:
+                            priority != IssuePriorities.priorities.last ? 8 : 0,
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
                         color:
@@ -725,7 +797,7 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
         Row(
           children: [
             Expanded(
-              child: GradientButton(
+              child: _GradientButton(
                 text: 'Camera',
                 icon: Icons.camera_alt,
                 onPressed: _pickImageFromCamera,
@@ -839,13 +911,135 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
   }
 
   Widget _buildSubmitButton() {
-    return GradientButton(
+    return _GradientButton(
       text: 'Submit Issue',
-      onPressed: _isLoading ? null : _submitIssue,
+      onPressed: _isLoading ? () {} : _submitIssue,
       isLoading: _isLoading,
       icon: Icons.send,
       gradient: ModernTheme.primaryGradient,
       height: 56,
+    );
+  }
+
+  // Helper method to get gradient for category
+  LinearGradient _getGradientForCategory(String category) {
+    switch (category) {
+      case 'Public Safety':
+        return ModernTheme.errorGradient;
+      case 'Electricity and Power':
+        return ModernTheme.accentGradient;
+      case 'Water and Sewage':
+        return ModernTheme.primaryGradient;
+      case 'Road and Transportation':
+        return ModernTheme.warningGradient;
+      case 'Environmental Issues':
+        return ModernTheme.successGradient;
+      default:
+        return ModernTheme.accentGradient;
+    }
+  }
+}
+
+// Supporting widgets defined locally to avoid conflicts
+
+class _ModernCard extends StatelessWidget {
+  final Widget child;
+  final Color? color;
+
+  const _ModernCard({required this.child, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color ?? Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(padding: const EdgeInsets.all(20), child: child),
+    );
+  }
+}
+
+class _GradientButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+  final bool isLoading;
+  final IconData? icon;
+  final LinearGradient gradient;
+  final double height;
+  final double? width;
+
+  const _GradientButton({
+    required this.text,
+    required this.onPressed,
+    this.isLoading = false,
+    this.icon,
+    required this.gradient,
+    this.height = 48,
+    this.width,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width ?? double.infinity,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: gradient.colors.first.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: isLoading ? null : onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isLoading) ...[
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ] else if (icon != null) ...[
+                  Icon(icon, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
