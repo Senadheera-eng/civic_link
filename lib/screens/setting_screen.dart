@@ -13,6 +13,7 @@ import '../services/settings_service.dart';
 import '../models/user_model.dart';
 import '../theme/modern_theme.dart';
 import 'citizen_help_support_screen.dart';
+import 'admin_help_support_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -60,31 +61,11 @@ class _SettingsScreenState extends State<SettingsScreen>
     _fadeController.forward();
   }
 
-  void _helpSupport() {
-    // Check if user is a citizen to show comprehensive help
-    if (_userData?.userType == 'citizen') {
-      // Navigate to the comprehensive Citizen Help & Support screen
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const CitizenHelpSupportScreen(),
-        ),
-      );
-    } else {
-      // For officials, show simple contact dialog
-      _showDialog(
-        'Help & Support',
-        'Need help? Contact our support team!\n\n'
-            '📧 Email: civiclink.official@gmail.com\n'
-            '📞 Phone: +1 (555) 123-4567\n'
-            '🌐 Website: www.civiclink.com\n\n'
-            'Business Hours:\n'
-            'Monday - Friday: 9:00 AM - 6:00 PM\n'
-            'Saturday: 10:00 AM - 4:00 PM\n'
-            'Sunday: Closed\n\n'
-            'For technical issues, please include your account type (Official) and department information.',
-      );
-    }
+  void _helpSupport(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AdminHelpSupportScreen()),
+    );
   }
 
   @override
@@ -1203,7 +1184,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         icon: Icons.help_outline,
         title: 'Help & Support',
         subtitle: 'Get help or contact support',
-        onTap: _helpSupport,
+        onTap: () => _helpSupport(context),
       ),
       _buildSettingsTile(
         icon: Icons.email_outlined,

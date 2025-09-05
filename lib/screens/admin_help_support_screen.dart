@@ -27,40 +27,30 @@ class _AdminHelpSupportScreenState extends State<AdminHelpSupportScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(140), // adjust AppBar height
+        preferredSize: const Size.fromHeight(140),
         child: AppBar(
           title: const Text(
             "Help & Admin Guide",
             style: TextStyle(
-              fontSize: 25, // change size here
+              fontSize: 25,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
-          centerTitle: true, // centers the title
+          centerTitle: true,
           backgroundColor: const Color.fromARGB(232, 78, 52, 122),
           bottom: TabBar(
             controller: _tabController,
-            indicatorColor: Colors.white, // underline color
-            labelColor: const Color.fromARGB(
-              255,
-              245,
-              244,
-              184,
-            ), // active tab text
-            unselectedLabelColor: const Color.fromARGB(
-              167,
-              255,
-              255,
-              255,
-            ), // inactive tab text
+            indicatorColor: Colors.white,
+            labelColor: const Color.fromARGB(255, 245, 244, 184),
+            unselectedLabelColor: const Color.fromARGB(167, 255, 255, 255),
             labelStyle: const TextStyle(
               fontSize: 18,
-              fontWeight: FontWeight.bold, // active tab font
+              fontWeight: FontWeight.bold,
             ),
             unselectedLabelStyle: const TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.normal, // inactive tab font
+              fontWeight: FontWeight.normal,
             ),
             tabs: const [
               Tab(text: "Getting Started"),

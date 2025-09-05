@@ -729,7 +729,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
             userData: _userData,
             departmentIssues: _departmentIssues,
             onRefresh: _loadData,
-            parentContext: context, // <-- Pass parent context here
+            parentContext: context,
           ),
     );
   }
