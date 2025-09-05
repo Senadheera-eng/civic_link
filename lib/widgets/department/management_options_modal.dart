@@ -1,6 +1,6 @@
-// widgets/department/management_options_modal.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../models/user_model.dart';
 import '../../models/issue_model.dart';
 import '../../theme/modern_theme.dart';
@@ -9,18 +9,20 @@ class ManagementOptionsModal extends StatelessWidget {
   final UserModel? userData;
   final List<IssueModel> departmentIssues;
   final VoidCallback onRefresh;
+  final BuildContext parentContext;
 
   const ManagementOptionsModal({
     Key? key,
     required this.userData,
     required this.departmentIssues,
     required this.onRefresh,
+    required this.parentContext,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
+      height: MediaQuery.of(context).size.height * 0.75,
       padding: const EdgeInsets.all(24),
       decoration: const BoxDecoration(
         color: ModernTheme.background,
@@ -87,10 +89,7 @@ class ManagementOptionsModal extends StatelessWidget {
                     'Manage department team',
                     () {
                       Navigator.pop(context);
-                      _showSuccessSnackBar(
-                        context,
-                        'Team management coming soon!',
-                      );
+                      _showTeamManagement(context);
                     },
                   ),
                   _buildManagementOption(
@@ -167,6 +166,51 @@ class ManagementOptionsModal extends StatelessWidget {
     );
   }
 
+  // 🔹 Analytics
+  void _showAnalytics(BuildContext context) {
+    final statusCounts = <String, int>{};
+    for (var issue in departmentIssues) {
+      statusCounts[issue.status] = (statusCounts[issue.status] ?? 0) + 1;
+    }
+
+    showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            title: const Text("Department Analytics"),
+            content: SizedBox(
+              height: 250,
+              width: 300,
+              child: BarChart(
+                BarChartData(
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(show: true),
+                  barGroups:
+                      statusCounts.entries.map((entry) {
+                        return BarChartGroupData(
+                          x: entry.key.hashCode % 100,
+                          barRods: [
+                            BarChartRodData(
+                              toY: entry.value.toDouble(),
+                              color: Colors.blue,
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                child: const Text("Close"),
+                onPressed: () => Navigator.of(parentContext).pop(),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // 🔹 Bulk Actions
   void _showBulkActions(BuildContext context) {
     final pendingIssues =
         departmentIssues
@@ -174,43 +218,37 @@ class ManagementOptionsModal extends StatelessWidget {
             .toList();
 
     if (pendingIssues.isEmpty) {
-      _showErrorSnackBar(
-        context,
-        'No pending issues available for bulk actions',
-      );
+      // Always use parentContext for snackbars
+      Future.delayed(Duration.zero, () {
+        _showErrorSnackBar(
+          parentContext,
+          'No pending issues available for bulk actions',
+        );
+      });
       return;
     }
 
     showDialog(
       context: context,
       builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+          (_) => AlertDialog(
             title: const Text('Bulk Actions'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('${pendingIssues.length} pending issues available'),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _performBulkStatusUpdate(
-                      context,
-                      pendingIssues.map((e) => e.id).toList(),
-                      'in_progress',
-                      'Bulk updated to In Progress by ${userData?.shortDisplayName}',
-                    );
-                  },
-                  child: const Text('Mark All as In Progress'),
-                ),
-              ],
-            ),
+            content: Text('${pendingIssues.length} pending issues available'),
             actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(parentContext).pop(); // Close dialog
+                  _performBulkStatusUpdate(
+                    context,
+                    pendingIssues.map((e) => e.id).toList(),
+                    'in_progress',
+                    'Bulk updated by ${userData?.shortDisplayName}',
+                  );
+                },
+                child: const Text('Mark All In Progress'),
+              ),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.of(parentContext).pop(),
                 child: const Text('Cancel'),
               ),
             ],
@@ -218,46 +256,41 @@ class ManagementOptionsModal extends StatelessWidget {
     );
   }
 
+  // 🔹 Assignment
   void _showAssignmentOptions(BuildContext context) {
     final unassignedIssues =
         departmentIssues
             .where(
-              (issue) =>
-                  issue.status.toLowerCase() == 'pending' &&
-                  (issue.assignedTo == null || issue.assignedTo!.isEmpty),
+              (i) =>
+                  i.status.toLowerCase() == 'pending' &&
+                  (i.assignedTo == null || i.assignedTo!.isEmpty),
             )
             .toList();
 
     if (unassignedIssues.isEmpty) {
-      _showErrorSnackBar(context, 'No unassigned issues available');
+      // Always use parentContext for snackbars
+      Future.delayed(Duration.zero, () {
+        _showErrorSnackBar(parentContext, 'No unassigned issues available');
+      });
       return;
     }
 
     showDialog(
       context: context,
       builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+          (_) => AlertDialog(
             title: const Text('Issue Assignment'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('${unassignedIssues.length} unassigned issues'),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _assignIssuesToSelf(context, unassignedIssues);
-                  },
-                  child: const Text('Assign All to Myself'),
-                ),
-              ],
-            ),
+            content: Text('${unassignedIssues.length} issues unassigned'),
             actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(parentContext).pop();
+                  _assignIssuesToSelf(context, unassignedIssues);
+                },
+                child: const Text('Assign All to Me'),
+              ),
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.of(parentContext).pop(),
                 child: const Text('Cancel'),
               ),
             ],
@@ -265,12 +298,128 @@ class ManagementOptionsModal extends StatelessWidget {
     );
   }
 
-  void _showAnalytics(BuildContext context) {
-    // This would open the analytics modal
-    // Implementation would be similar to the existing analytics modal
-    _showSuccessSnackBar(context, 'Analytics feature coming soon!');
+  // 🔹 Team Management
+  void _showTeamManagement(BuildContext context) {
+    final TextEditingController controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            title: const Text("Team Management"),
+            content: SizedBox(
+              width: 350,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 250,
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream:
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .where(
+                                'departmentId',
+                                isEqualTo: userData?.department,
+                              )
+                              .snapshots(),
+                      builder: (ctx, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Center(
+                            child: Text("No team members found."),
+                          );
+                        }
+
+                        final users = snapshot.data!.docs;
+                        return ListView.builder(
+                          itemCount: users.length,
+                          itemBuilder: (ctx, i) {
+                            final user = users[i];
+                            return ListTile(
+                              leading: const Icon(Icons.person),
+                              title: Text(user['displayName'] ?? 'Unnamed'),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () async {
+                                  await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(user.id)
+                                      .delete();
+                                },
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          decoration: const InputDecoration(
+                            hintText: "Enter member name",
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add, color: Colors.green),
+                        onPressed: () async {
+                          if (controller.text.isNotEmpty) {
+                            try {
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .add({
+                                    'displayName': controller.text.trim(),
+                                    'departmentId': userData?.department,
+                                    'role': 'member',
+                                    'email': '',
+                                    'createdAt': FieldValue.serverTimestamp(),
+                                  });
+                              controller.clear();
+
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Member added successfully"),
+                                ),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                SnackBar(
+                                  content: Text("Failed to add member: $e"),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(parentContext).pop(),
+                child: const Text("Close"),
+              ),
+            ],
+          ),
+    );
   }
 
+  // 🔹 Firestore helpers
   Future<void> _performBulkStatusUpdate(
     BuildContext context,
     List<String> issueIds,
@@ -278,55 +427,9 @@ class ManagementOptionsModal extends StatelessWidget {
     String notes,
   ) async {
     try {
-      await _bulkUpdateIssues(
-        issueIds: issueIds,
-        newStatus: newStatus,
-        notes: notes,
-      );
-      _showSuccessSnackBar(
-        context,
-        '${issueIds.length} issues updated successfully',
-      );
-      onRefresh();
-    } catch (e) {
-      _showErrorSnackBar(context, 'Failed to update issues: $e');
-    }
-  }
-
-  Future<void> _assignIssuesToSelf(
-    BuildContext context,
-    List<IssueModel> issues,
-  ) async {
-    if (userData == null) return;
-
-    try {
-      for (final issue in issues) {
-        await _assignIssue(
-          issueId: issue.id,
-          assignedToId: userData!.uid,
-          assignedToName: userData!.displayName,
-          notes: 'Self-assigned by ${userData!.shortDisplayName}',
-        );
-      }
-      _showSuccessSnackBar(context, '${issues.length} issues assigned to you');
-      onRefresh();
-    } catch (e) {
-      _showErrorSnackBar(context, 'Failed to assign issues: $e');
-    }
-  }
-
-  Future<void> _bulkUpdateIssues({
-    required List<String> issueIds,
-    required String newStatus,
-    required String notes,
-  }) async {
-    try {
       final batch = FirebaseFirestore.instance.batch();
-
-      for (String issueId in issueIds) {
-        final docRef = FirebaseFirestore.instance
-            .collection('issues')
-            .doc(issueId);
+      for (String id in issueIds) {
+        final docRef = FirebaseFirestore.instance.collection('issues').doc(id);
         batch.update(docRef, {
           'status': newStatus,
           'adminNotes': notes,
@@ -334,37 +437,51 @@ class ManagementOptionsModal extends StatelessWidget {
           'updatedBy': userData?.uid,
         });
       }
-
       await batch.commit();
+      // Show snackbar after closing modal
+      Future.delayed(Duration.zero, () {
+        _showSuccessSnackBar(
+          parentContext,
+          '${issueIds.length} issues updated',
+        );
+      });
+      onRefresh();
     } catch (e) {
-      throw 'Failed to update issues: $e';
+      Future.delayed(Duration.zero, () {
+        _showErrorSnackBar(parentContext, 'Failed: $e');
+      });
     }
   }
 
-  Future<void> _assignIssue({
-    required String issueId,
-    required String assignedToId,
-    required String assignedToName,
-    required String notes,
-  }) async {
+  // ...existing code...
+  Future<void> _assignIssuesToSelf(
+    BuildContext context,
+    List<IssueModel> issues,
+  ) async {
+    if (userData == null) return;
     try {
-      await FirebaseFirestore.instance
-          .collection('issues')
-          .doc(issueId)
-          .update({
-            'assignedTo': assignedToId,
-            'assignedToName': assignedToName,
-            'adminNotes': notes,
-            'status': 'in_progress',
-            'updatedAt': FieldValue.serverTimestamp(),
-            'assignedAt': FieldValue.serverTimestamp(),
-            'assignedBy': userData?.uid,
-          });
+      for (final issue in issues) {
+        await FirebaseFirestore.instance
+            .collection('issues')
+            .doc(issue.id)
+            .update({
+              'assignedTo': userData!.uid,
+              'assignedToName': userData!.displayName,
+              'status': 'in_progress',
+              'adminNotes': 'Self-assigned by ${userData!.shortDisplayName}',
+              'assignedAt': FieldValue.serverTimestamp(),
+            });
+      }
+      _showSuccessSnackBar(parentContext, '${issues.length} issues assigned');
+      Navigator.of(parentContext).pop(); // Close the modal/dialog
+      onRefresh();
     } catch (e) {
-      throw 'Failed to assign issue: $e';
+      _showErrorSnackBar(parentContext, 'Failed: $e');
     }
   }
 
+  // ...existing code...
+  // 🔹 Snackbars
   void _showSuccessSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -377,8 +494,8 @@ class ManagementOptionsModal extends StatelessWidget {
         ),
         backgroundColor: ModernTheme.success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -388,15 +505,15 @@ class ManagementOptionsModal extends StatelessWidget {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.error_outline, color: Colors.white),
+            const Icon(Icons.error, color: Colors.white),
             const SizedBox(width: 12),
             Expanded(child: Text(message)),
           ],
         ),
         backgroundColor: ModernTheme.error,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

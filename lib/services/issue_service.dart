@@ -246,13 +246,13 @@ class IssueService {
         print("⚠️ Firestore network issue: $e");
       }
 
-      // Try to get issues with detailed error handling
+      // 🔁 Force fresh data from the server
       final querySnapshot = await FirebaseFirestore.instance
           .collection('issues')
           .where('userId', isEqualTo: user.uid)
           .orderBy('createdAt', descending: true)
-          .get()
-          .timeout(Duration(seconds: 30)); // Add timeout
+          .get(const GetOptions(source: Source.server)) // <-- key change
+          .timeout(const Duration(seconds: 30));
 
       print(
         "✅ Query executed successfully, found ${querySnapshot.docs.length} documents",
