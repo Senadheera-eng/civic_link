@@ -1,4 +1,4 @@
-// screens/department_dashboard.dart (REORGANIZED VERSION)
+// screens/department_dashboard.dart (ENHANCED VERSION)
 import 'package:civic_link/models/notification_model.dart';
 import 'package:civic_link/screens/department_notifications_screen.dart';
 import 'package:civic_link/services/notification_service.dart';
@@ -31,8 +31,10 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
 
   late AnimationController _fadeController;
   late AnimationController _refreshController;
+  late AnimationController _pulseController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _refreshAnimation;
+  late Animation<double> _pulseAnimation;
 
   StreamSubscription<QuerySnapshot>? _issuesSubscription;
 
@@ -52,6 +54,8 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
   int _thisMonthCount = 0;
   int _urgentCount = 0;
   int _assignedToMeCount = 0;
+  int _overdueCount = 0;
+  int _newTodayCount = 0;
 
   // Performance metrics
   double _averageResolutionTime = 0.0;
@@ -64,49 +68,605 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     _loadData();
   }
 
-  Widget _buildCategoryCard({
-    required String title,
-    required int count,
-    required Color color,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.15), // light background tint
+  void _initAnimations() {
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _refreshController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+
+    _refreshAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _refreshController, curve: Curves.elasticOut),
+    );
+
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _fadeController.forward();
+    _pulseController.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _issuesSubscription?.cancel();
+    _fadeController.dispose();
+    _refreshController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    if (!_isLoading) {
+      setState(() => _isRefreshing = true);
+      _refreshController.forward().then((_) => _refreshController.reset());
+    }
+
+    try {
+      final userData = await _authService.getUserData();
+
+      if (userData == null ||
+          !userData.isOfficial ||
+          userData.department == null) {
+        _showErrorSnackBar('Access denied: Invalid account type');
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
+      }
+
+      if (!userData.isVerified) {
+        return;
+      }
+
+      final issues = await _getIssuesByDepartment(userData.department!);
+      final assignedIssues = await _getAssignedIssues(userData.uid);
+
+      _calculateStatistics(issues, assignedIssues);
+      _calculatePerformanceMetrics(issues);
+
+      setState(() {
+        _userData = userData;
+        _departmentIssues = issues;
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+
+      _setupRealTimeListener();
+    } catch (e) {
+      print('Error loading data: $e');
+      setState(() {
+        _isLoading = false;
+        _isRefreshing = false;
+      });
+      _showErrorSnackBar('Failed to load dashboard data: ${e.toString()}');
+    }
+  }
+
+  void _setupRealTimeListener() {
+    _issuesSubscription?.cancel();
+
+    if (_userData?.department == null) {
+      print("⚠️ No department found, skipping real-time listener setup");
+      return;
+    }
+
+    print(
+      "🔔 Setting up real-time listener for department: ${_userData!.department}",
+    );
+
+    _issuesSubscription = FirebaseFirestore.instance
+        .collection('issues')
+        .where('category', isEqualTo: _userData!.department!)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+          if (mounted) {
+            print("🔔 Real-time update: ${snapshot.docs.length} issues found");
+            _processRealTimeUpdate(snapshot);
+          }
+        });
+  }
+
+  void _processRealTimeUpdate(QuerySnapshot snapshot) {
+    final issues =
+        snapshot.docs.map((doc) => IssueModel.fromFirestore(doc)).toList();
+
+    setState(() {
+      _departmentIssues = issues;
+    });
+
+    _getAssignedIssues(_userData?.uid ?? '').then((assignedIssues) {
+      _calculateStatistics(issues, assignedIssues);
+      _calculatePerformanceMetrics(issues);
+      setState(() {});
+    });
+  }
+
+  void _calculateStatistics(
+    List<IssueModel> issues,
+    List<IssueModel> assignedIssues,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekAgo = now.subtract(const Duration(days: 7));
+    final monthAgo = now.subtract(const Duration(days: 30));
+
+    _totalIssues = issues.length;
+    _pendingCount =
+        issues.where((issue) => issue.status.toLowerCase() == 'pending').length;
+    _inProgressCount =
+        issues
+            .where((issue) => issue.status.toLowerCase() == 'in_progress')
+            .length;
+    _resolvedCount =
+        issues
+            .where((issue) => issue.status.toLowerCase() == 'resolved')
+            .length;
+    _rejectedCount =
+        issues
+            .where((issue) => issue.status.toLowerCase() == 'rejected')
+            .length;
+    _thisWeekCount =
+        issues.where((issue) => issue.createdAt.isAfter(weekAgo)).length;
+    _thisMonthCount =
+        issues.where((issue) => issue.createdAt.isAfter(monthAgo)).length;
+    _assignedToMeCount = assignedIssues.length;
+    _newTodayCount =
+        issues.where((issue) => issue.createdAt.isAfter(today)).length;
+
+    _urgentCount =
+        issues
+            .where(
+              (issue) =>
+                  (issue.priority.toLowerCase() == 'high' ||
+                      issue.priority.toLowerCase() == 'critical') &&
+                  issue.status.toLowerCase() == 'pending',
+            )
+            .length;
+
+    // Calculate overdue issues (pending for more than 3 days)
+    final threeDaysAgo = now.subtract(const Duration(days: 3));
+    _overdueCount =
+        issues
+            .where(
+              (issue) =>
+                  issue.status.toLowerCase() == 'pending' &&
+                  issue.createdAt.isBefore(threeDaysAgo),
+            )
+            .length;
+  }
+
+  void _calculatePerformanceMetrics(List<IssueModel> issues) {
+    final resolvedIssues =
+        issues
+            .where((issue) => issue.status.toLowerCase() == 'resolved')
+            .toList();
+
+    if (resolvedIssues.isNotEmpty) {
+      final totalHours = resolvedIssues.fold<double>(0, (sum, issue) {
+        if (issue.updatedAt != null) {
+          return sum +
+              issue.updatedAt!.difference(issue.createdAt).inHours.toDouble();
+        }
+        return sum;
+      });
+      _averageResolutionTime = totalHours / resolvedIssues.length;
+      _resolutionRate = (resolvedIssues.length / _totalIssues) * 100;
+    } else {
+      _averageResolutionTime = 0.0;
+      _resolutionRate = 0.0;
+    }
+  }
+
+  List<IssueModel> get _filteredIssues {
+    switch (_selectedTab) {
+      case 'pending':
+        return _departmentIssues
+            .where((issue) => issue.status.toLowerCase() == 'pending')
+            .toList();
+      case 'urgent':
+        return _departmentIssues
+            .where(
+              (issue) =>
+                  (issue.priority.toLowerCase() == 'high' ||
+                      issue.priority.toLowerCase() == 'critical') &&
+                  issue.status.toLowerCase() == 'pending',
+            )
+            .toList();
+      case 'assigned':
+        return _departmentIssues
+            .where((issue) => issue.assignedTo == _userData?.uid)
+            .toList();
+      case 'in_progress':
+        return _departmentIssues
+            .where((issue) => issue.status.toLowerCase() == 'in_progress')
+            .toList();
+      case 'resolved':
+        return _departmentIssues
+            .where((issue) => issue.status.toLowerCase() == 'resolved')
+            .toList();
+      case 'overdue':
+        final threeDaysAgo = DateTime.now().subtract(const Duration(days: 3));
+        return _departmentIssues
+            .where(
+              (issue) =>
+                  issue.status.toLowerCase() == 'pending' &&
+                  issue.createdAt.isBefore(threeDaysAgo),
+            )
+            .toList();
+      case 'new_today':
+        final today = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+        );
+        return _departmentIssues
+            .where((issue) => issue.createdAt.isAfter(today))
+            .toList();
+      default:
+        return _departmentIssues;
+    }
+  }
+
+  Future<void> _refreshData() async {
+    await _loadData();
+  }
+
+  Future<void> _signOut() async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => const Center(
+              child: ModernCard(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Signing out...'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+      );
+
+      await _authService.signOut();
+      Navigator.of(context).pop();
+      Navigator.pushReplacementNamed(context, '/login');
+    } catch (e) {
+      Navigator.of(context).pop();
+      _showErrorSnackBar('Sign out failed: $e');
+    }
+  }
+
+  void _showManagementOptions() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (modalContext) => ManagementOptionsModal(
+            userData: _userData,
+            departmentIssues: _departmentIssues,
+            onRefresh: _loadData,
+            parentContext: context,
+          ),
+    );
+  }
+
+  void _showAnalytics() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AnalyticsModal(
+            userData: _userData,
+            totalIssues: _totalIssues,
+            resolutionRate: _resolutionRate,
+            averageResolutionTime: _averageResolutionTime,
+            thisMonthCount: _thisMonthCount,
+            pendingCount: _pendingCount,
+            inProgressCount: _inProgressCount,
+            resolvedCount: _resolvedCount,
+            rejectedCount: _rejectedCount,
+            urgentCount: _urgentCount,
+            assignedToMeCount: _assignedToMeCount,
+            thisWeekCount: _thisWeekCount,
+          ),
+    );
+  }
+
+  // Enhanced Priority-Based Triage Section
+  Widget _buildPriorityTriageSection() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Issue Triage Center',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: ModernTheme.successGradient,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Live Updates',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Priority Grid
+          GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1.4,
+            children: [
+              _buildTriageCard(
+                'Urgent Queue',
+                _urgentCount,
+                Icons.priority_high,
+                ModernTheme.errorGradient,
+                'urgent',
+                'Critical & High priority',
+              ),
+              _buildTriageCard(
+                'New Today',
+                _newTodayCount,
+                Icons.fiber_new,
+                ModernTheme.primaryGradient,
+                'new_today',
+                'Reported today',
+              ),
+              _buildTriageCard(
+                'Assigned to Me',
+                _assignedToMeCount,
+                Icons.assignment_ind,
+                ModernTheme.accentGradient,
+                'assigned',
+                'Your active tasks',
+              ),
+              _buildTriageCard(
+                'Overdue',
+                _overdueCount,
+                Icons.schedule,
+                ModernTheme.warningGradient,
+                'overdue',
+                'Pending > 3 days',
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Quick Status Overview
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickStatCard(
+                  'In Progress',
+                  _inProgressCount,
+                  ModernTheme.accent,
+                  'in_progress',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickStatCard(
+                  'Resolved',
+                  _resolvedCount,
+                  ModernTheme.success,
+                  'resolved',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickStatCard(
+                  'Pending',
+                  _pendingCount,
+                  ModernTheme.warning,
+                  'pending',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTriageCard(
+    String title,
+    int count,
+    IconData icon,
+    LinearGradient gradient,
+    String filterKey,
+    String subtitle,
+  ) {
+    final isSelected = _selectedTab == filterKey;
+    final isUrgent = filterKey == 'urgent' && count > 0;
+
+    return ScaleTransition(
+      scale: isUrgent ? _pulseAnimation : const AlwaysStoppedAnimation(1.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _selectedTab = filterKey),
           borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              "$count",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: gradient.colors.first.withOpacity(
+                    isSelected ? 0.6 : 0.3,
+                  ),
+                  blurRadius: isSelected ? 20 : 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border:
+                  isSelected
+                      ? Border.all(
+                        color: Colors.white.withOpacity(0.5),
+                        width: 2,
+                      )
+                      : null,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 20),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          count.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 11,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildQuickStatCard(
+    String title,
+    int count,
+    Color color,
+    String filterKey,
+  ) {
+    final isSelected = _selectedTab == filterKey;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => _selectedTab = filterKey),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withOpacity(0.2) : color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : color.withOpacity(0.3),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                count.toString(),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Enhanced Notification Center
   Widget _buildNotificationCenter() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -131,7 +691,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                 const SizedBox(width: 16),
                 const Expanded(
                   child: Text(
-                    'Department Notifications',
+                    'Citizen Communications',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -185,12 +745,11 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Text(
-                    'No notifications yet',
+                    'No citizen communications yet',
                     style: TextStyle(color: ModernTheme.textSecondary),
                   );
                 }
 
-                // Filter for department-relevant notifications
                 final departmentNotifications =
                     snapshot.data!
                         .where(
@@ -204,7 +763,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
 
                 if (departmentNotifications.isEmpty) {
                   return const Text(
-                    'No department notifications',
+                    'No recent communications from citizens',
                     style: TextStyle(color: ModernTheme.textSecondary),
                   );
                 }
@@ -226,7 +785,6 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     );
   }
 
-  // ADD THIS METHOD to your existing _DepartmentDashboardState class
   Widget _buildQuickNotificationItem(NotificationModel notification) {
     final canReply = notification.data['canReply'] == true;
 
@@ -314,7 +872,43 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     );
   }
 
-  // ADD THESE METHODS to your existing _DepartmentDashboardState class
+  // Helper methods and issue service methods remain the same...
+  Future<List<IssueModel>> _getIssuesByDepartment(String department) async {
+    try {
+      final querySnapshot =
+          await FirebaseFirestore.instance
+              .collection('issues')
+              .where('category', isEqualTo: department)
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      return querySnapshot.docs
+          .map((doc) => IssueModel.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print('Error getting issues by department: $e');
+      return [];
+    }
+  }
+
+  Future<List<IssueModel>> _getAssignedIssues(String userId) async {
+    try {
+      final querySnapshot =
+          await FirebaseFirestore.instance
+              .collection('issues')
+              .where('assignedTo', isEqualTo: userId)
+              .orderBy('createdAt', descending: true)
+              .get();
+
+      return querySnapshot.docs
+          .map((doc) => IssueModel.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print('Error getting assigned issues: $e');
+      return [];
+    }
+  }
+
   void _openDepartmentNotifications() {
     Navigator.push(
       context,
@@ -450,348 +1044,6 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     }
   }
 
-  void _initAnimations() {
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-    _refreshController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
-
-    _refreshAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _refreshController, curve: Curves.elasticOut),
-    );
-
-    _fadeController.forward();
-  }
-
-  @override
-  void dispose() {
-    _issuesSubscription?.cancel();
-    _fadeController.dispose();
-    _refreshController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadData() async {
-    if (!_isLoading) {
-      setState(() => _isRefreshing = true);
-      _refreshController.forward().then((_) => _refreshController.reset());
-    }
-
-    try {
-      // Load user data
-      final userData = await _authService.getUserData();
-
-      if (userData == null ||
-          !userData.isOfficial ||
-          userData.department == null) {
-        _showErrorSnackBar('Access denied: Invalid account type');
-        Navigator.pushReplacementNamed(context, '/login');
-        return;
-      }
-
-      if (!userData.isVerified) {
-        return;
-      }
-
-      // Load department issues
-      final issues = await _getIssuesByDepartment(userData.department!);
-      final assignedIssues = await _getAssignedIssues(userData.uid);
-
-      // Calculate statistics
-      _calculateStatistics(issues, assignedIssues);
-      _calculatePerformanceMetrics(issues);
-
-      setState(() {
-        _userData = userData;
-        _departmentIssues = issues;
-        _isLoading = false;
-        _isRefreshing = false;
-      });
-      // Setup real-time listener after userData is available
-      _setupRealTimeListener();
-    } catch (e) {
-      print('Error loading data: $e');
-      setState(() {
-        _isLoading = false;
-        _isRefreshing = false;
-      });
-      _showErrorSnackBar('Failed to load dashboard data: ${e.toString()}');
-    }
-  }
-
-  void _setupRealTimeListener() {
-    // Cancel existing subscription to avoid duplicates
-    _issuesSubscription?.cancel();
-
-    if (_userData?.department == null) {
-      print("⚠️ No department found, skipping real-time listener setup");
-      return;
-    }
-
-    print(
-      "🔔 Setting up real-time listener for department: ${_userData!.department}",
-    );
-
-    // Listen to real-time changes in issues collection
-    _issuesSubscription = FirebaseFirestore.instance
-        .collection('issues')
-        .where('category', isEqualTo: _userData!.department!)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-          if (mounted) {
-            print("🔔 Real-time update: ${snapshot.docs.length} issues found");
-            _processRealTimeUpdate(snapshot);
-          }
-        });
-  }
-
-  void _processRealTimeUpdate(QuerySnapshot snapshot) {
-    final issues =
-        snapshot.docs.map((doc) => IssueModel.fromFirestore(doc)).toList();
-
-    setState(() {
-      _departmentIssues = issues;
-    });
-
-    // Recalculate statistics with updated data
-    _getAssignedIssues(_userData?.uid ?? '').then((assignedIssues) {
-      _calculateStatistics(issues, assignedIssues);
-      _calculatePerformanceMetrics(issues);
-      setState(() {});
-    });
-  }
-
-  void _calculateStatistics(
-    List<IssueModel> issues,
-    List<IssueModel> assignedIssues,
-  ) {
-    final now = DateTime.now();
-    final weekAgo = now.subtract(const Duration(days: 7));
-    final monthAgo = now.subtract(const Duration(days: 30));
-
-    _totalIssues = issues.length;
-    _pendingCount =
-        issues.where((issue) => issue.status.toLowerCase() == 'pending').length;
-    _inProgressCount =
-        issues
-            .where((issue) => issue.status.toLowerCase() == 'in_progress')
-            .length;
-    _resolvedCount =
-        issues
-            .where((issue) => issue.status.toLowerCase() == 'resolved')
-            .length;
-    _rejectedCount =
-        issues
-            .where((issue) => issue.status.toLowerCase() == 'rejected')
-            .length;
-    _thisWeekCount =
-        issues.where((issue) => issue.createdAt.isAfter(weekAgo)).length;
-    _thisMonthCount =
-        issues.where((issue) => issue.createdAt.isAfter(monthAgo)).length;
-    _assignedToMeCount = assignedIssues.length;
-
-    _urgentCount =
-        issues
-            .where(
-              (issue) =>
-                  (issue.priority.toLowerCase() == 'high' ||
-                      issue.priority.toLowerCase() == 'critical') &&
-                  issue.status.toLowerCase() == 'pending',
-            )
-            .length;
-  }
-
-  void _calculatePerformanceMetrics(List<IssueModel> issues) {
-    final resolvedIssues =
-        issues
-            .where((issue) => issue.status.toLowerCase() == 'resolved')
-            .toList();
-
-    if (resolvedIssues.isNotEmpty) {
-      final totalHours = resolvedIssues.fold<double>(0, (sum, issue) {
-        if (issue.updatedAt != null) {
-          return sum +
-              issue.updatedAt!.difference(issue.createdAt).inHours.toDouble();
-        }
-        return sum;
-      });
-      _averageResolutionTime = totalHours / resolvedIssues.length;
-      _resolutionRate = (resolvedIssues.length / _totalIssues) * 100;
-    } else {
-      _averageResolutionTime = 0.0;
-      _resolutionRate = 0.0;
-    }
-  }
-
-  void _checkForNewIssues(List<IssueModel> newIssues) {
-    final now = DateTime.now();
-    final recentIssues =
-        newIssues
-            .where(
-              (issue) =>
-                  now.difference(issue.createdAt).inMinutes < 5 &&
-                  issue.status.toLowerCase() == 'pending',
-            )
-            .toList();
-
-    if (recentIssues.isNotEmpty && _departmentIssues.isNotEmpty) {
-      _showSuccessSnackBar(
-        '${recentIssues.length} new issue(s) reported in your department!',
-      );
-    }
-  }
-
-  List<IssueModel> get _filteredIssues {
-    switch (_selectedTab) {
-      case 'pending':
-        return _departmentIssues
-            .where((issue) => issue.status.toLowerCase() == 'pending')
-            .toList();
-      case 'in_progress':
-        return _departmentIssues
-            .where((issue) => issue.status.toLowerCase() == 'in_progress')
-            .toList();
-      case 'resolved':
-        return _departmentIssues
-            .where((issue) => issue.status.toLowerCase() == 'resolved')
-            .toList();
-      case 'urgent':
-        return _departmentIssues
-            .where(
-              (issue) =>
-                  (issue.priority.toLowerCase() == 'high' ||
-                      issue.priority.toLowerCase() == 'critical') &&
-                  issue.status.toLowerCase() == 'pending',
-            )
-            .toList();
-      case 'assigned':
-        return _departmentIssues
-            .where((issue) => issue.assignedTo == _userData?.uid)
-            .toList();
-      default:
-        return _departmentIssues;
-    }
-  }
-
-  Future<void> _refreshData() async {
-    await _loadData();
-  }
-
-  Future<void> _signOut() async {
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder:
-            (context) => const Center(
-              child: ModernCard(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Signing out...'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-      );
-
-      await _authService.signOut();
-      Navigator.of(context).pop();
-      Navigator.pushReplacementNamed(context, '/login');
-    } catch (e) {
-      Navigator.of(context).pop();
-      _showErrorSnackBar('Sign out failed: $e');
-    }
-  }
-
-  void _showManagementOptions() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder:
-          (modalContext) => ManagementOptionsModal(
-            userData: _userData,
-            departmentIssues: _departmentIssues,
-            onRefresh: _loadData,
-            parentContext: context,
-          ),
-    );
-  }
-
-  void _showAnalytics() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AnalyticsModal(
-            userData: _userData,
-            totalIssues: _totalIssues,
-            resolutionRate: _resolutionRate,
-            averageResolutionTime: _averageResolutionTime,
-            thisMonthCount: _thisMonthCount,
-            pendingCount: _pendingCount,
-            inProgressCount: _inProgressCount,
-            resolvedCount: _resolvedCount,
-            rejectedCount: _rejectedCount,
-            urgentCount: _urgentCount,
-            assignedToMeCount: _assignedToMeCount,
-            thisWeekCount: _thisWeekCount,
-          ),
-    );
-  }
-
-  // Issue service methods
-  Future<List<IssueModel>> _getIssuesByDepartment(String department) async {
-    try {
-      final querySnapshot =
-          await FirebaseFirestore.instance
-              .collection('issues')
-              .where('category', isEqualTo: department)
-              .orderBy('createdAt', descending: true)
-              .get();
-
-      return querySnapshot.docs
-          .map((doc) => IssueModel.fromFirestore(doc))
-          .toList();
-    } catch (e) {
-      print('Error getting issues by department: $e');
-      return [];
-    }
-  }
-
-  Future<List<IssueModel>> _getAssignedIssues(String userId) async {
-    try {
-      final querySnapshot =
-          await FirebaseFirestore.instance
-              .collection('issues')
-              .where('assignedTo', isEqualTo: userId)
-              .orderBy('createdAt', descending: true)
-              .get();
-
-      return querySnapshot.docs
-          .map((doc) => IssueModel.fromFirestore(doc))
-          .toList();
-    } catch (e) {
-      print('Error getting assigned issues: $e');
-      return [];
-    }
-  }
-
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -828,168 +1080,6 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     );
   }
 
-  // NEW: Professional Filter Tabs Widget
-  Widget _buildProfessionalFilterTabs() {
-    final tabs = [
-      {
-        'key': 'pending',
-        'label': 'Pending',
-        'icon': Icons.pending_actions,
-        'count': _pendingCount,
-      },
-      {
-        'key': 'urgent',
-        'label': 'Urgent',
-        'icon': Icons.priority_high,
-        'count': _urgentCount,
-      },
-      {
-        'key': 'assigned',
-        'label': 'Assigned',
-        'icon': Icons.assignment_ind,
-        'count': _assignedToMeCount,
-      },
-      {
-        'key': 'in_progress',
-        'label': 'In Progress',
-        'icon': Icons.construction,
-        'count': _inProgressCount,
-      },
-      {
-        'key': 'resolved',
-        'label': 'Resolved',
-        'icon': Icons.check_circle,
-        'count': _resolvedCount,
-      },
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Issue Categories',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: ModernTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 1.6,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: tabs.length,
-            itemBuilder: (context, index) {
-              final tab = tabs[index];
-              final isSelected = _selectedTab == tab['key'];
-              final count = tab['count'] as int;
-
-              Color getTabColor(String key) {
-                switch (key) {
-                  case 'pending':
-                    return ModernTheme.warning;
-                  case 'urgent':
-                    return ModernTheme.error;
-                  case 'assigned':
-                    return ModernTheme.accent;
-                  case 'in_progress':
-                    return ModernTheme.primaryBlue;
-                  case 'resolved':
-                    return ModernTheme.success;
-                  default:
-                    return ModernTheme.textSecondary;
-                }
-              }
-
-              final tabColor = getTabColor(tab['key'] as String);
-
-              return Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap:
-                      () => setState(() => _selectedTab = tab['key'] as String),
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [tabColor, tabColor.withOpacity(0.85)],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: tabColor.withOpacity(isSelected ? 0.9 : 0.3),
-                          blurRadius: isSelected ? 18 : 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                tab['icon'] as IconData,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  count.toString(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            tab['label'] as String,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1005,7 +1095,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                 CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
                 SizedBox(height: 24),
                 Text(
-                  'Loading Dashboard...',
+                  'Loading Department Dashboard...',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -1014,7 +1104,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Please wait while we fetch your department data',
+                  'Fetching live issue data and notifications',
                   style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
               ],
@@ -1062,8 +1152,8 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // REORGANIZED: Professional Filter Tabs (replaced stats)
-                          _buildProfessionalFilterTabs(),
+                          // Enhanced Priority-Based Triage Section
+                          _buildPriorityTriageSection(),
 
                           // Performance Metrics
                           PerformanceMetrics(
@@ -1071,6 +1161,8 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                             averageResolutionTime: _averageResolutionTime,
                             assignedToMeCount: _assignedToMeCount,
                           ),
+
+                          // Enhanced Notification Center
                           _buildNotificationCenter(),
                         ],
                       ),
@@ -1159,7 +1251,6 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         if (index == 0) {
-          // Add top padding for the first item
           return Container(
             color: ModernTheme.background,
             child: Padding(
@@ -1169,16 +1260,29 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                 right: 24,
                 bottom: 8,
               ),
-              child: _buildIssueCard(filteredIssues[index], index),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_getFilterDisplayName(_selectedTab)} (${filteredIssues.length})',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: ModernTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildEnhancedIssueCard(filteredIssues[index], index),
+                ],
+              ),
             ),
           );
         } else if (index == filteredIssues.length - 1) {
-          // Add bottom padding for the last item to account for FAB
           return Container(
             color: ModernTheme.background,
             child: Padding(
               padding: const EdgeInsets.only(left: 24, right: 24, bottom: 120),
-              child: _buildIssueCard(filteredIssues[index], index),
+              child: _buildEnhancedIssueCard(filteredIssues[index], index),
             ),
           );
         } else {
@@ -1186,7 +1290,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
             color: ModernTheme.background,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: _buildIssueCard(filteredIssues[index], index),
+              child: _buildEnhancedIssueCard(filteredIssues[index], index),
             ),
           );
         }
@@ -1194,13 +1298,16 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     );
   }
 
-  Widget _buildIssueCard(IssueModel issue, int index) {
+  Widget _buildEnhancedIssueCard(IssueModel issue, int index) {
     final statusColor = _getStatusColor(issue.status);
     final priorityColor = _getPriorityColor(issue.priority);
     final isUrgent =
         issue.priority.toLowerCase() == 'high' ||
         issue.priority.toLowerCase() == 'critical';
     final isAssignedToMe = issue.assignedTo == _userData?.uid;
+    final isOverdue =
+        DateTime.now().difference(issue.createdAt).inDays > 3 &&
+        issue.status.toLowerCase() == 'pending';
 
     return ModernCard(
       onTap: () {
@@ -1211,11 +1318,16 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
           ),
         ).then((_) => _loadData());
       },
-      color: isUrgent ? ModernTheme.error.withOpacity(0.05) : null,
+      color:
+          isUrgent
+              ? ModernTheme.error.withOpacity(0.05)
+              : isOverdue
+              ? ModernTheme.warning.withOpacity(0.05)
+              : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with status and priority
+          // Enhanced Header with more context
           Row(
             children: [
               Container(
@@ -1224,11 +1336,17 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                   gradient:
                       isUrgent
                           ? ModernTheme.errorGradient
+                          : isOverdue
+                          ? ModernTheme.warningGradient
                           : ModernTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  isUrgent ? Icons.priority_high : Icons.report_problem,
+                  isUrgent
+                      ? Icons.priority_high
+                      : isOverdue
+                      ? Icons.schedule
+                      : Icons.report_problem,
                   size: 24,
                   color: Colors.white,
                 ),
@@ -1264,6 +1382,25 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
                             ),
                             child: const Text(
                               'URGENT',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        if (isOverdue && !isUrgent)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: ModernTheme.warning,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'OVERDUE',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.white,
@@ -1359,7 +1496,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
 
           const SizedBox(height: 16),
 
-          // Footer with location, images, and time
+          // Enhanced Footer with more information
           Row(
             children: [
               Icon(
@@ -1499,6 +1636,27 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     }
   }
 
+  String _getFilterDisplayName(String filter) {
+    switch (filter) {
+      case 'urgent':
+        return 'Urgent Issues';
+      case 'new_today':
+        return 'New Today';
+      case 'assigned':
+        return 'Assigned to Me';
+      case 'overdue':
+        return 'Overdue Issues';
+      case 'in_progress':
+        return 'In Progress';
+      case 'resolved':
+        return 'Resolved Issues';
+      case 'pending':
+        return 'Pending Issues';
+      default:
+        return 'All Issues';
+    }
+  }
+
   IconData _getEmptyStateIcon(String tab) {
     switch (tab) {
       case 'pending':
@@ -1511,6 +1669,10 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
         return Icons.construction;
       case 'resolved':
         return Icons.check_circle_outline;
+      case 'overdue':
+        return Icons.schedule;
+      case 'new_today':
+        return Icons.fiber_new;
       default:
         return Icons.inbox_outlined;
     }
@@ -1528,6 +1690,10 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
         return 'No Issues In Progress';
       case 'resolved':
         return 'No Resolved Issues';
+      case 'overdue':
+        return 'No Overdue Issues';
+      case 'new_today':
+        return 'No New Issues Today';
       default:
         return 'No Issues Found';
     }
@@ -1545,6 +1711,10 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
         return 'Issues being worked on will appear here';
       case 'resolved':
         return 'Completed issues will appear here';
+      case 'overdue':
+        return 'Issues pending for more than 3 days will appear here';
+      case 'new_today':
+        return 'Issues reported today will appear here';
       default:
         return 'Issues will appear here when available';
     }

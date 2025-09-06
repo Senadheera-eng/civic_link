@@ -30,12 +30,30 @@ class IssueService {
     required String address,
   }) async {
     try {
-      print("📝 IssueService: Starting issue submission");
+      print("🚀 IssueService: Starting issue submission");
+      print("📁 DEBUG: Received category parameter: '$category'");
 
       final user = currentUser;
       if (user == null) {
         throw 'User not authenticated';
       }
+
+      // Validate category - make sure it's one of the expected values
+      final validCategories = [
+        'Road and Transportation',
+        'Water and Sewage',
+        'Electricity and Power',
+        'Public Safety',
+        'Environmental Issues',
+      ];
+
+      if (!validCategories.contains(category)) {
+        print("❌ Invalid category received: '$category'");
+        print("✅ Valid categories: $validCategories");
+        throw 'Invalid category: $category';
+      }
+
+      print("✅ Category validation passed: '$category'");
 
       // Upload images first
       List<String> imageUrls = [];
@@ -45,34 +63,104 @@ class IssueService {
         print("✅ Images uploaded successfully");
       }
 
-      // Create issue document
-      final issueData = IssueModel(
-        id: '', // Will be set by Firestore
-        title: title,
-        description: description,
-        category: category,
-        status: 'pending',
-        priority: priority,
-        userId: user.uid,
-        userEmail: user.email ?? '',
-        userName: user.displayName ?? 'Anonymous',
-        latitude: latitude,
-        longitude: longitude,
-        address: address,
-        imageUrls: imageUrls,
-        createdAt: DateTime.now(),
-      );
+      // Create issue data directly as Map to avoid any IssueModel conversion issues
+      final issueData = {
+        'title': title,
+        'description': description,
+        'category': category, // Directly assign the category parameter
+        'status': 'pending',
+        'priority': priority,
+        'userId': user.uid,
+        'userEmail': user.email ?? '',
+        'userName': user.displayName ?? 'Anonymous',
+        'latitude': latitude,
+        'longitude': longitude,
+        'address': address,
+        'imageUrls': imageUrls,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
 
-      // Save to Firestore
+      print("📋 Final issue data being submitted:");
+      print("   Title: ${issueData['title']}");
+      print("   Category: ${issueData['category']}");
+      print("   Priority: ${issueData['priority']}");
+      print("   Status: ${issueData['status']}");
+      print("   User: ${issueData['userName']} (${issueData['userId']})");
+
+      // Save directly to Firestore with explicit data
       DocumentReference docRef = await _firestore
           .collection('issues')
-          .add(issueData.toFirestore());
+          .add(issueData);
 
       print("✅ Issue submitted successfully with ID: ${docRef.id}");
+
+      // Verify the data was saved correctly
+      DocumentSnapshot savedDoc = await docRef.get();
+      if (savedDoc.exists) {
+        final savedData = savedDoc.data() as Map<String, dynamic>;
+        print("🔍 Verification - Saved category: '${savedData['category']}'");
+
+        if (savedData['category'] != category) {
+          print("❌ WARNING: Category mismatch!");
+          print("   Expected: '$category'");
+          print("   Saved: '${savedData['category']}'");
+        } else {
+          print("✅ Category saved correctly: '${savedData['category']}'");
+        }
+      }
+
       return docRef.id;
     } catch (e) {
       print("❌ Error submitting issue: $e");
       throw 'Failed to submit issue: $e';
+    }
+  }
+
+  // Also add this method to check if there are any Firestore rules issues:
+  Future<void> testCategorySubmission() async {
+    try {
+      print("🧪 Testing category submission...");
+
+      final testCategories = [
+        'Road and Transportation',
+        'Water and Sewage',
+        'Electricity and Power',
+        'Public Safety',
+        'Environmental Issues',
+      ];
+
+      for (String category in testCategories) {
+        print("Testing category: '$category'");
+
+        // Create a test document
+        final testData = {
+          'title': 'Test Issue',
+          'category': category,
+          'status': 'pending',
+          'userId': currentUser?.uid ?? 'test-user',
+          'createdAt': FieldValue.serverTimestamp(),
+        };
+
+        // Try to add it
+        DocumentReference docRef = await _firestore
+            .collection('test_issues')
+            .add(testData);
+
+        // Verify it was saved correctly
+        DocumentSnapshot doc = await docRef.get();
+        if (doc.exists) {
+          final savedData = doc.data() as Map<String, dynamic>;
+          print("✅ Category '$category' saved as: '${savedData['category']}'");
+
+          // Clean up test document
+          await docRef.delete();
+        }
+      }
+
+      print("✅ Category test completed");
+    } catch (e) {
+      print("❌ Category test failed: $e");
     }
   }
 
