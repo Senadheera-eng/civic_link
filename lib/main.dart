@@ -9,7 +9,6 @@ import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/admin_dashboard.dart';
 import 'services/auth_service.dart';
 import 'theme/simple_theme.dart';
 import 'theme/modern_theme.dart';
