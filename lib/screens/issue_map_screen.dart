@@ -1,4 +1,4 @@
-// lib/screens/issue_map_screen.dart (SIMPLE WORKING VERSION)
+// lib/screens/issue_map_screen.dart
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -16,7 +16,6 @@ class IssueMapScreen extends StatefulWidget {
 class _IssueMapScreenState extends State<IssueMapScreen> {
   final IssueService _issueService = IssueService();
 
-  // Google Maps
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
 
@@ -25,12 +24,10 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
   Position? _currentLocation;
   bool _isLoading = true;
 
-  // UI State
   bool _showMapView = false;
 
-  // Filters
   String _selectedCategory = 'All';
-  double _radiusKm = 5.0; // THIS IS THE ADJUSTABLE RADIUS
+  double _radiusKm = 5.0;
 
   @override
   void initState() {
@@ -48,10 +45,7 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Get current location
       await _getCurrentLocation();
-
-      // Load all issues
       final issues = await _issueService.getAllIssues();
 
       setState(() {
@@ -59,7 +53,6 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
         _isLoading = false;
       });
 
-      // Filter issues based on radius
       _filterIssues();
     } catch (e) {
       setState(() => _isLoading = false);
@@ -94,14 +87,12 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
     }
   }
 
-  // MAIN FUNCTION: Filter issues based on radius
   void _filterIssues() {
     if (_allIssues.isEmpty || _currentLocation == null) return;
 
     List<IssueModel> filtered = [];
 
     for (var issue in _allIssues) {
-      // Calculate distance from current location to issue
       double distance = Geolocator.distanceBetween(
         _currentLocation!.latitude,
         _currentLocation!.longitude,
@@ -109,13 +100,11 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
         issue.longitude,
       );
 
-      // Convert radius to meters and check if issue is within radius
       if (distance <= (_radiusKm * 1000)) {
         filtered.add(issue);
       }
     }
 
-    // Filter by category if not 'All'
     if (_selectedCategory != 'All') {
       filtered =
           filtered
@@ -123,7 +112,6 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
               .toList();
     }
 
-    // Sort by distance (nearest first)
     filtered.sort((a, b) {
       double distanceA = Geolocator.distanceBetween(
         _currentLocation!.latitude,
@@ -145,7 +133,6 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
     });
 
     _updateMapMarkers();
-    print('🔍 Filtered to ${filtered.length} issues within ${_radiusKm}km');
   }
 
   void _updateMapMarkers() {
@@ -153,7 +140,6 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
 
     Set<Marker> markers = {};
 
-    // Add markers for filtered issues
     for (var issue in _filteredIssues) {
       markers.add(
         Marker(
@@ -167,7 +153,6 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
       );
     }
 
-    // Add current location marker
     if (_currentLocation != null) {
       markers.add(
         Marker(
@@ -202,12 +187,11 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
     }
   }
 
-  // RADIUS CHANGE HANDLER
   void _onRadiusChanged(double newRadius) {
     setState(() {
       _radiusKm = newRadius;
     });
-    _filterIssues(); // Re-filter when radius changes
+    _filterIssues();
   }
 
   @override
@@ -216,7 +200,6 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
       backgroundColor: Colors.white,
       body: Column(
         children: [
-          // Header
           SafeArea(
             child: Container(
               padding: const EdgeInsets.all(20),
@@ -249,7 +232,7 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
             ),
           ),
 
-          // View Toggle
+          // View toggle
           Container(
             margin: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -326,7 +309,7 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
             ),
           ),
 
-          // Filters Section
+          // Filters
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(16),
@@ -337,46 +320,36 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Category Filter
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedCategory,
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
-                          border: OutlineInputBorder(),
-                        ),
-                        items:
-                            [
-                                  'All',
-                                  'Public Safety',
-                                  'Electricity and Power',
-                                  'Water and Sewage',
-                                  'Road and Transportation',
-                                  'Environmental Issues',
-                                ]
-                                .map(
-                                  (category) => DropdownMenuItem(
-                                    value: category,
-                                    child: Text(category),
-                                  ),
-                                )
-                                .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _selectedCategory = value);
-                            _filterIssues();
-                          }
-                        },
-                      ),
-                    ),
-                  ],
+                DropdownButtonFormField<String>(
+                  value: _selectedCategory,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    border: OutlineInputBorder(),
+                  ),
+                  items:
+                      [
+                            'All',
+                            'Public Safety',
+                            'Electricity and Power',
+                            'Water and Sewage',
+                            'Road and Transportation',
+                            'Environmental Issues',
+                          ]
+                          .map(
+                            (category) => DropdownMenuItem(
+                              value: category,
+                              child: Text(category),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedCategory = value);
+                      _filterIssues();
+                    }
+                  },
                 ),
-
                 const SizedBox(height: 16),
-
-                // RADIUS CONTROL - THIS IS THE MAIN FEATURE!
                 Text(
                   'Search Radius: ${_radiusKm.toStringAsFixed(1)} km',
                   style: const TextStyle(
@@ -385,44 +358,61 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // Radius Slider
                 Slider(
                   value: _radiusKm,
                   min: 1.0,
                   max: 50.0,
                   divisions: 49,
                   activeColor: ModernTheme.primary,
-                  onChanged: _onRadiusChanged, // This updates the radius!
+                  onChanged: _onRadiusChanged,
                 ),
-
-                // Quick radius buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children:
                       [1, 5, 10, 25, 50].map((radius) {
-                        return ElevatedButton(
-                          onPressed: () => _onRadiusChanged(radius.toDouble()),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                _radiusKm.round() == radius
-                                    ? ModernTheme.primary
-                                    : Colors.grey[300],
-                            foregroundColor:
-                                _radiusKm.round() == radius
-                                    ? Colors.white
-                                    : Colors.black,
+                        return SizedBox(
+                          height: 30,
+                          child: OutlinedButton(
+                            onPressed:
+                                () => _onRadiusChanged(radius.toDouble()),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              backgroundColor:
+                                  _radiusKm.round() == radius
+                                      ? ModernTheme.primary
+                                      : Colors.white,
+                              foregroundColor:
+                                  _radiusKm.round() == radius
+                                      ? Colors.white
+                                      : Colors.black,
+                              side: BorderSide(
+                                color:
+                                    _radiusKm.round() == radius
+                                        ? ModernTheme.primary
+                                        : Colors.grey.shade400,
+                              ),
+                              minimumSize: const Size(48, 28),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              '${radius}km',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
-                          child: Text('${radius}km'),
                         );
                       }).toList(),
                 ),
-
-                // Results Count
                 const SizedBox(height: 12),
                 Text(
                   '${_filteredIssues.length} issues found within ${_radiusKm.toStringAsFixed(1)}km',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -430,7 +420,6 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
 
           const SizedBox(height: 16),
 
-          // Content Area
           Expanded(
             child:
                 _isLoading
@@ -450,8 +439,12 @@ class _IssueMapScreenState extends State<IssueMapScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade400, width: 1),
+      ),
       clipBehavior: Clip.hardEdge,
       child: GoogleMap(
         onMapCreated: (GoogleMapController controller) {
