@@ -152,7 +152,6 @@ class _MyAppState extends State<MyApp> {
         '/login': (context) => LoginScreen(),
         '/register': (context) => RegisterScreen(),
         '/home': (context) => HomeScreen(),
-        '/admin': (context) => AdminDashboard(),
         '/department': (context) => DepartmentDashboard(),
         '/settings': (context) => SettingsScreen(),
         '/official-settings': (context) => OfficialSettingsScreen(),
@@ -395,10 +394,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
       case 'citizen':
         print("👤 CITIZEN USER → Home Screen");
         return HomeScreen();
-
-      case 'admin':
-        print("🔧 ADMIN USER → Admin Dashboard");
-        return AdminDashboard();
 
       default:
         print("❓ UNKNOWN USER TYPE: '$cleanUserType' → Defaulting to Home");
