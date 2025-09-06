@@ -174,12 +174,29 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
     setState(() => _isLoading = true);
 
     try {
-      print("📝 Submitting issue...");
+      // DEBUG: Print the selected category to verify it's correct
+      print("🎯 DEBUG: Selected Category = '$_selectedCategory'");
+      print("🎯 DEBUG: Available Categories = ${IssueCategories.categories}");
+      print(
+        "🎯 DEBUG: Category Index = ${IssueCategories.categories.indexOf(_selectedCategory)}",
+      );
+
+      // Verify the category is valid
+      if (!IssueCategories.categories.contains(_selectedCategory)) {
+        throw Exception('Invalid category selected: $_selectedCategory');
+      }
+
+      print("🚀 Submitting issue...");
+      print("📁 Title: ${_titleController.text.trim()}");
+      print("📁 Category: $_selectedCategory");
+      print("📁 Priority: $_selectedPriority");
+      print("📁 Description: ${_descriptionController.text.trim()}");
 
       final issueId = await _issueService.submitIssue(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        category: _selectedCategory,
+        category:
+            _selectedCategory, // Make sure this is the exact category name
         priority: _selectedPriority,
         images: _selectedImages,
         latitude: _currentLocation!.latitude,
@@ -188,12 +205,13 @@ class _ModernReportIssueScreenState extends State<ModernReportIssueScreen>
       );
 
       print("✅ Issue submitted successfully with ID: $issueId");
+      print("✅ Issue should be routed to department: $_selectedCategory");
 
       if (mounted) {
-        _showSuccessSnackBar('Issue submitted successfully!');
-        // Add a delay to ensure the success message is seen
+        _showSuccessSnackBar(
+          'Issue submitted to $_selectedCategory department!',
+        );
         await Future.delayed(const Duration(seconds: 1));
-        // Return true to indicate successful submission
         Navigator.pop(context, true);
       }
     } catch (e) {

@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../theme/modern_theme.dart';
-import '../../screens/official_settings_screen.dart';
 import '../../screens/admin_help_support_screen.dart';
 
 class DepartmentHeader extends StatelessWidget {
@@ -77,12 +76,7 @@ class DepartmentHeader extends StatelessWidget {
                     child: IconButton(
                       icon: const Icon(Icons.settings, color: Colors.white),
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => OfficialSettingsScreen(),
-                          ),
-                        );
+                        Navigator.pushNamed(context, '/settings');
                       },
                       tooltip: 'Settings',
                     ),
@@ -116,9 +110,6 @@ class DepartmentHeader extends StatelessWidget {
                         case 'profile':
                           _showProfileDialog(context);
                           break;
-                        case 'help':
-                          _navigateToHelpSupport(context);
-                          break;
                         case 'logout':
                           onSignOut();
                           break;
@@ -133,16 +124,6 @@ class DepartmentHeader extends StatelessWidget {
                                 Icon(Icons.person_outline),
                                 SizedBox(width: 12),
                                 Text('View Profile'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'help',
-                            child: Row(
-                              children: [
-                                Icon(Icons.help_outline),
-                                SizedBox(width: 12),
-                                Text('Help & Support'),
                               ],
                             ),
                           ),
@@ -289,13 +270,6 @@ class DepartmentHeader extends StatelessWidget {
               ),
             ],
           ),
-    );
-  }
-
-  void _navigateToHelpSupport(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const AdminHelpSupportScreen()),
     );
   }
 

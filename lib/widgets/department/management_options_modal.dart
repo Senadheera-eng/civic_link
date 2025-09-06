@@ -21,36 +21,39 @@ class ManagementOptionsModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: ModernTheme.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: ModernTheme.textTertiary,
-              borderRadius: BorderRadius.circular(2),
-            ),
+    return Wrap(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: const BoxDecoration(
+            color: ModernTheme.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          const SizedBox(height: 20),
-          const Text(
-            'Management Options',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: ModernTheme.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
+          child: Column(
+            mainAxisSize:
+                MainAxisSize.min, // 👈 makes container wrap its content
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ModernTheme.textTertiary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Management Options',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // 👇 SingleChildScrollView is optional now, but keep if list might grow
+              Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildManagementOption(
                     context,
@@ -91,23 +94,14 @@ class ManagementOptionsModal extends StatelessWidget {
                       Navigator.pop(context);
                       _showTeamManagement(context);
                     },
-                  ),
-                  _buildManagementOption(
-                    context,
-                    Icons.settings,
-                    'Department Settings',
-                    'Configure department preferences',
-                    () {
-                      Navigator.pop(context);
-                      Navigator.pushNamed(context, '/settings');
-                    },
+                    isLast: true,
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -116,10 +110,11 @@ class ManagementOptionsModal extends StatelessWidget {
     IconData icon,
     String title,
     String subtitle,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    bool isLast = false, // mark the final item to remove bottom gap
+  }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: isLast ? EdgeInsets.zero : const EdgeInsets.only(bottom: 16),
       child: ModernCard(
         onTap: onTap,
         child: Row(
@@ -453,7 +448,6 @@ class ManagementOptionsModal extends StatelessWidget {
     }
   }
 
-  // ...existing code...
   Future<void> _assignIssuesToSelf(
     BuildContext context,
     List<IssueModel> issues,
@@ -473,14 +467,13 @@ class ManagementOptionsModal extends StatelessWidget {
             });
       }
       _showSuccessSnackBar(parentContext, '${issues.length} issues assigned');
-      Navigator.of(parentContext).pop(); // Close the modal/dialog
+      Navigator.of(parentContext).pop();
       onRefresh();
     } catch (e) {
       _showErrorSnackBar(parentContext, 'Failed: $e');
     }
   }
 
-  // ...existing code...
   // 🔹 Snackbars
   void _showSuccessSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(

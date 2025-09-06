@@ -1,4 +1,4 @@
-// models/issue_model.dart (UPDATED FOR 5 DEPARTMENTS)
+// models/issue_model.dart (FIXED VERSION)
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class IssueModel {
@@ -40,19 +40,29 @@ class IssueModel {
     this.assignedTo,
   });
 
-  // Create from Firestore document with legacy category mapping
+  // FIXED: Create from Firestore document WITHOUT automatic category mapping
   factory IssueModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // Get the raw category and map legacy categories to new ones
+    // Get the raw category - DON'T map it automatically
     String rawCategory = data['category'] ?? 'Environmental Issues';
-    String mappedCategory = _mapLegacyCategory(rawCategory);
+
+    // Only map if it's actually a legacy category that needs mapping
+    String finalCategory;
+    if (_isLegacyCategory(rawCategory)) {
+      finalCategory = _mapLegacyCategory(rawCategory);
+      print("📋 Mapping legacy category '$rawCategory' to '$finalCategory'");
+    } else {
+      // It's already a valid new category, use it as-is
+      finalCategory = rawCategory;
+      print("📋 Using category as-is: '$finalCategory'");
+    }
 
     return IssueModel(
       id: doc.id,
       title: data['title'] ?? '',
       description: data['description'] ?? '',
-      category: mappedCategory, // Use mapped category
+      category: finalCategory, // Use the correct category
       status: data['status'] ?? 'pending',
       priority: data['priority'] ?? 'medium',
       userId: data['userId'] ?? '',
@@ -74,7 +84,7 @@ class IssueModel {
     return {
       'title': title,
       'description': description,
-      'category': category,
+      'category': category, // This should preserve the exact category
       'status': status,
       'priority': priority,
       'userId': userId,
@@ -163,7 +173,23 @@ class IssueModel {
     }
   }
 
-  // PRIVATE: Map legacy categories to new 5 departments
+  // NEW: Check if a category is a legacy category that needs mapping
+  static bool _isLegacyCategory(String category) {
+    const legacyCategories = [
+      'Road & Transportation',
+      'Water & Sewerage',
+      'Electricity',
+      'Waste Management',
+      'Parks & Recreation',
+      'Street Lighting',
+      'Public Buildings',
+      'Traffic Management',
+      'Other',
+    ];
+    return legacyCategories.contains(category);
+  }
+
+  // FIXED: Map legacy categories to new 5 departments - only for actual legacy categories
   static String _mapLegacyCategory(String oldCategory) {
     switch (oldCategory) {
       case 'Road & Transportation':
@@ -172,18 +198,17 @@ class IssueModel {
         return 'Water and Sewage';
       case 'Electricity':
         return 'Electricity and Power';
-      case 'Public Safety':
-        return 'Public Safety';
       case 'Waste Management':
       case 'Parks & Recreation':
       case 'Street Lighting':
       case 'Public Buildings':
       case 'Traffic Management':
-      case 'Environmental Issues':
       case 'Other':
         return 'Environmental Issues';
       default:
-        return 'Environmental Issues'; // Default fallback
+        // If it's not a known legacy category, return it as-is
+        // This prevents valid new categories from being changed
+        return oldCategory;
     }
   }
 
@@ -204,7 +229,7 @@ class IssueModel {
   ].contains(status.toLowerCase());
 }
 
-// UPDATED: Issue categories - now only 5 departments
+// Keep the rest of your classes exactly the same...
 class IssueCategories {
   static const List<String> categories = [
     'Public Safety',
@@ -214,7 +239,6 @@ class IssueCategories {
     'Environmental Issues',
   ];
 
-  // UPDATED: Category icons for new departments
   static const Map<String, String> categoryIcons = {
     'Public Safety': '🚨',
     'Electricity and Power': '⚡',
@@ -223,7 +247,6 @@ class IssueCategories {
     'Environmental Issues': '🌱',
   };
 
-  // NEW: Category descriptions
   static const Map<String, String> categoryDescriptions = {
     'Public Safety': 'Police, fire, emergency services',
     'Electricity and Power': 'Power supply, electrical infrastructure',
@@ -232,7 +255,6 @@ class IssueCategories {
     'Environmental Issues': 'Environmental protection, pollution control',
   };
 
-  // NEW: Category colors (hex values for Flutter Color constructor)
   static const Map<String, int> categoryColors = {
     'Public Safety': 0xFFE53E3E, // Red
     'Electricity and Power': 0xFF805AD5, // Purple
@@ -241,17 +263,14 @@ class IssueCategories {
     'Environmental Issues': 0xFF38A169, // Green
   };
 
-  // NEW: Helper methods
-  static String getIcon(String category) => categoryIcons[category] ?? '📝';
+  static String getIcon(String category) => categoryIcons[category] ?? '📋';
   static String getDescription(String category) =>
       categoryDescriptions[category] ?? 'General issue';
   static int getColorValue(String category) =>
       categoryColors[category] ?? 0xFF718096;
 
-  // NEW: Check if category exists
   static bool isValidCategory(String category) => categories.contains(category);
 
-  // NEW: Map legacy category to new department
   static String mapLegacyCategory(String oldCategory) {
     switch (oldCategory) {
       case 'Road & Transportation':
@@ -276,7 +295,6 @@ class IssueCategories {
   }
 }
 
-// Issue priorities (kept the same)
 class IssuePriorities {
   static const List<String> priorities = ['Low', 'Medium', 'High', 'Critical'];
 
@@ -287,7 +305,6 @@ class IssuePriorities {
     'Critical': 'Urgent, safety concern',
   };
 
-  // NEW: Priority colors
   static const Map<String, int> priorityColors = {
     'Low': 0xFF4CAF50, // Green
     'Medium': 0xFFFF9800, // Orange
@@ -295,7 +312,6 @@ class IssuePriorities {
     'Critical': 0xFFDC2626, // Dark Red
   };
 
-  // NEW: Helper methods
   static String getDescription(String priority) =>
       priorityDescriptions[priority] ?? 'Unknown priority';
   static int getColorValue(String priority) =>
@@ -304,7 +320,6 @@ class IssuePriorities {
       priorities.map((p) => p.toLowerCase()).contains(priority.toLowerCase());
 }
 
-// NEW: Issue status helper class
 class IssueStatuses {
   static const List<String> statuses = [
     'Pending',
@@ -327,7 +342,6 @@ class IssueStatuses {
     'Rejected': 0xFFF44336, // Red
   };
 
-  // Helper methods
   static String getDescription(String status) {
     final normalizedStatus = _normalizeStatus(status);
     return statusDescriptions[normalizedStatus] ?? 'Unknown status';
@@ -347,7 +361,6 @@ class IssueStatuses {
     ].contains(status.toLowerCase());
   }
 
-  // Convert database status to display format
   static String _normalizeStatus(String status) {
     switch (status.toLowerCase()) {
       case 'pending':

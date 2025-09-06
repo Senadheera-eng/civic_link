@@ -1,4 +1,5 @@
 // screens/register_screen.dart (ENHANCED UI - MORE ATTRACTIVE & COLORFUL - COMPLETE)
+import 'package:civic_link/models/issue_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
@@ -35,46 +36,46 @@ class _RegisterScreenState extends State<RegisterScreen>
   // Updated department list - reduced to 5 departments as requested
   final List<Map<String, dynamic>> _departments = [
     {
-      'name': 'Public Safety',
+      'name': IssueCategories.categories[0], // 'Public Safety'
       'icon': Icons.security,
-      'color': const Color(0xFFE91E63), // Pink
-      'description': '',
+      'color': const Color(0xFFE91E63),
+      'description': 'Police, fire, emergency services',
       'gradient': const LinearGradient(
         colors: [Color(0xFFE91E63), Color(0xFFF48FB1)],
       ),
     },
     {
-      'name': 'Electricity and Power',
+      'name': IssueCategories.categories[1], // 'Electricity and Power'
       'icon': Icons.electrical_services,
-      'color': const Color(0xFFFF9800), // Orange
-      'description': '',
+      'color': const Color(0xFFFF9800),
+      'description': 'Power supply, electrical infrastructure',
       'gradient': const LinearGradient(
         colors: [Color(0xFFFF9800), Color(0xFFFFCC02)],
       ),
     },
     {
-      'name': 'Water and Sewage',
+      'name': IssueCategories.categories[2], // 'Water and Sewage'
       'icon': Icons.water_drop,
-      'color': const Color(0xFF2196F3), // Blue
-      'description': '',
+      'color': const Color(0xFF2196F3),
+      'description': 'Water supply, drainage, sewerage systems',
       'gradient': const LinearGradient(
         colors: [Color(0xFF2196F3), Color(0xFF03DAC6)],
       ),
     },
     {
-      'name': 'Road and Transportation',
+      'name': IssueCategories.categories[3], // 'Road and Transportation'
       'icon': Icons.construction,
-      'color': const Color(0xFF9C27B0), // Purple
-      'description': '',
+      'color': const Color(0xFF9C27B0),
+      'description': 'Roads, bridges, traffic systems',
       'gradient': const LinearGradient(
         colors: [Color(0xFF9C27B0), Color(0xFF673AB7)],
       ),
     },
     {
-      'name': 'Environmental Issues',
+      'name': IssueCategories.categories[4], // 'Environmental Issues'
       'icon': Icons.eco,
-      'color': const Color(0xFF4CAF50), // Green
-      'description': '',
+      'color': const Color(0xFF4CAF50),
+      'description': 'Environmental protection, pollution control',
       'gradient': const LinearGradient(
         colors: [Color(0xFF4CAF50), Color(0xFF8BC34A)],
       ),
@@ -86,7 +87,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     super.initState();
     _initAnimations();
     // Set default department to first one
-    _selectedDepartment = _departments.first['name'];
+    _selectedDepartment = IssueCategories.categories.first;
   }
 
   void _showErrorSnackBar(String message) {
