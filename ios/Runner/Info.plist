@@ -13,6 +13,10 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs location access to show nearby issues on the map.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs location access to show nearby issues on the map.</string>
 	<string>civic_link</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
