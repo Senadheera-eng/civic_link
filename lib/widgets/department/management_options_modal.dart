@@ -1,3 +1,4 @@
+import 'package:civic_link/widgets/department/analytics_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -163,46 +164,93 @@ class ManagementOptionsModal extends StatelessWidget {
 
   // 🔹 Analytics
   void _showAnalytics(BuildContext context) {
-    final statusCounts = <String, int>{};
-    for (var issue in departmentIssues) {
-      statusCounts[issue.status] = (statusCounts[issue.status] ?? 0) + 1;
-    }
-
     showDialog(
       context: context,
       builder:
-          (_) => AlertDialog(
-            title: const Text("Department Analytics"),
-            content: SizedBox(
-              height: 250,
-              width: 300,
-              child: BarChart(
-                BarChartData(
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(show: true),
-                  barGroups:
-                      statusCounts.entries.map((entry) {
-                        return BarChartGroupData(
-                          x: entry.key.hashCode % 100,
-                          barRods: [
-                            BarChartRodData(
-                              toY: entry.value.toDouble(),
-                              color: Colors.blue,
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                child: const Text("Close"),
-                onPressed: () => Navigator.of(parentContext).pop(),
-              ),
-            ],
+          (_) => AnalyticsModal(
+            userData: userData,
+            totalIssues: departmentIssues.length,
+            resolutionRate: _calculateResolutionRate(),
+            averageResolutionTime: _calculateAverageResolutionTime(),
+            thisMonthCount: _getThisMonthCount(),
+            pendingCount: _getPendingCount(),
+            inProgressCount: _getInProgressCount(),
+            resolvedCount: _getResolvedCount(),
+            rejectedCount: _getRejectedCount(),
+            urgentCount: _getUrgentCount(),
+            assignedToMeCount: _getAssignedToMeCount(),
+            thisWeekCount: _getThisWeekCount(),
           ),
     );
+  }
+
+  // Add these helper methods to calculate the metrics:
+  double _calculateResolutionRate() {
+    if (departmentIssues.isEmpty) return 0.0;
+    final resolved =
+        departmentIssues
+            .where((i) => i.status.toLowerCase() == 'resolved')
+            .length;
+    return (resolved / departmentIssues.length) * 100;
+  }
+
+  double _calculateAverageResolutionTime() {
+    final resolved =
+        departmentIssues
+            .where(
+              (i) =>
+                  i.status.toLowerCase() == 'resolved' && i.updatedAt != null,
+            )
+            .toList();
+    if (resolved.isEmpty) return 0.0;
+
+    final totalHours = resolved.fold<double>(
+      0,
+      (sum, issue) =>
+          sum + issue.updatedAt!.difference(issue.createdAt).inHours,
+    );
+    return totalHours / resolved.length;
+  }
+
+  int _getThisMonthCount() {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
+    return departmentIssues
+        .where((i) => i.createdAt.isAfter(monthStart))
+        .length;
+  }
+
+  int _getPendingCount() =>
+      departmentIssues.where((i) => i.status.toLowerCase() == 'pending').length;
+  int _getInProgressCount() =>
+      departmentIssues
+          .where((i) => i.status.toLowerCase() == 'in_progress')
+          .length;
+  int _getResolvedCount() =>
+      departmentIssues
+          .where((i) => i.status.toLowerCase() == 'resolved')
+          .length;
+  int _getRejectedCount() =>
+      departmentIssues
+          .where((i) => i.status.toLowerCase() == 'rejected')
+          .length;
+
+  int _getUrgentCount() =>
+      departmentIssues
+          .where(
+            (i) =>
+                (i.priority.toLowerCase() == 'high' ||
+                    i.priority.toLowerCase() == 'critical') &&
+                i.status.toLowerCase() == 'pending',
+          )
+          .length;
+
+  int _getAssignedToMeCount() =>
+      departmentIssues.where((i) => i.assignedTo == userData?.uid).length;
+
+  int _getThisWeekCount() {
+    final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+    return departmentIssues.where((i) => i.createdAt.isAfter(weekAgo)).length;
   }
 
   // 🔹 Bulk Actions
