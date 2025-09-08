@@ -309,10 +309,17 @@ packages:
     dependency: "direct main"
     description:
       name: fl_chart
+<<<<<<< HEAD
       sha256: f2e9137f261d0f53a820f6b829c80ba570ac915284c8e32789d973834796eca0
       url: "https://pub.dev"
     source: hosted
     version: "0.71.0"
+=======
+      sha256: d3f82f4a38e33ba23d05a08ff304d7d8b22d2a59a5503f20bd802966e915db89
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
+>>>>>>> parent of d09b8d3 (Merge branch 'branch-officialsFixes' into merging-branch-lahiru)
   flutter:
     dependency: "direct main"
     description: flutter
@@ -1204,4 +1211,4 @@ packages:
     version: "6.5.0"
 sdks:
   dart: ">=3.8.0 <4.0.0"
-  flutter: ">=3.27.0"
+  flutter: ">=3.27.4"

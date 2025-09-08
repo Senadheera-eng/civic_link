@@ -1,4 +1,4 @@
-// screens/department_dashboard.dart (PROFESSIONAL STYLING ONLY)
+// screens/department_dashboard.dart (ENHANCED VERSION)
 import 'package:civic_link/models/notification_model.dart';
 import 'package:civic_link/screens/department_notifications_screen.dart';
 import 'package:civic_link/services/notification_service.dart';
@@ -31,8 +31,10 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
 
   late AnimationController _fadeController;
   late AnimationController _refreshController;
+  late AnimationController _pulseController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _refreshAnimation;
+  late Animation<double> _pulseAnimation;
 
   StreamSubscription<QuerySnapshot>? _issuesSubscription;
 
@@ -52,6 +54,8 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
   int _thisMonthCount = 0;
   int _urgentCount = 0;
   int _assignedToMeCount = 0;
+  int _overdueCount = 0;
+  int _newTodayCount = 0;
 
   // Performance metrics
   double _averageResolutionTime = 0.0;
@@ -73,6 +77,10 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     );
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
 
     _fadeAnimation = Tween<double>(
       begin: 0.0,
@@ -83,7 +91,12 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
       CurvedAnimation(parent: _refreshController, curve: Curves.elasticOut),
     );
 
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     _fadeController.forward();
+    _pulseController.repeat(reverse: true);
   }
 
   @override
@@ -91,6 +104,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     _issuesSubscription?.cancel();
     _fadeController.dispose();
     _refreshController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -101,7 +115,6 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     }
 
     try {
-      // Load user data
       final userData = await _authService.getUserData();
 
       if (userData == null ||
@@ -116,9 +129,11 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
         return;
       }
 
-      // Load department issues
       final issues = await _getIssuesByDepartment(userData.department!);
       final assignedIssues = await _getAssignedIssues(userData.uid);
+
+      _calculateStatistics(issues, assignedIssues);
+      _calculatePerformanceMetrics(issues);
 
       setState(() {
         _userData = userData;
@@ -127,16 +142,180 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
         _isRefreshing = false;
       });
 
-      _calculateStatistics(issues, assignedIssues);
-      _calculatePerformanceMetrics(issues);
-      _subscribeToRealTimeUpdates();
+      _setupRealTimeListener();
     } catch (e) {
-      print('Error loading dashboard data: $e');
+      print('Error loading data: $e');
       setState(() {
         _isLoading = false;
         _isRefreshing = false;
       });
-      _showErrorSnackBar('Failed to load dashboard: ${e.toString()}');
+      _showErrorSnackBar('Failed to load dashboard data: ${e.toString()}');
+    }
+  }
+
+  void _setupRealTimeListener() {
+    _issuesSubscription?.cancel();
+
+    if (_userData?.department == null) {
+      print("⚠️ No department found, skipping real-time listener setup");
+      return;
+    }
+
+    print(
+      "🔔 Setting up real-time listener for department: ${_userData!.department}",
+    );
+
+    _issuesSubscription = FirebaseFirestore.instance
+        .collection('issues')
+        .where('category', isEqualTo: _userData!.department!)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+          if (mounted) {
+            print("🔔 Real-time update: ${snapshot.docs.length} issues found");
+            _processRealTimeUpdate(snapshot);
+          }
+        });
+  }
+
+  void _processRealTimeUpdate(QuerySnapshot snapshot) {
+    final issues =
+        snapshot.docs.map((doc) => IssueModel.fromFirestore(doc)).toList();
+
+    setState(() {
+      _departmentIssues = issues;
+    });
+
+    _getAssignedIssues(_userData?.uid ?? '').then((assignedIssues) {
+      _calculateStatistics(issues, assignedIssues);
+      _calculatePerformanceMetrics(issues);
+      setState(() {});
+    });
+  }
+
+  void _calculateStatistics(
+    List<IssueModel> issues,
+    List<IssueModel> assignedIssues,
+  ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekAgo = now.subtract(const Duration(days: 7));
+    final monthAgo = now.subtract(const Duration(days: 30));
+
+    _totalIssues = issues.length;
+    _pendingCount =
+        issues.where((issue) => issue.status.toLowerCase() == 'pending').length;
+    _inProgressCount =
+        issues
+            .where((issue) => issue.status.toLowerCase() == 'in_progress')
+            .length;
+    _resolvedCount =
+        issues
+            .where((issue) => issue.status.toLowerCase() == 'resolved')
+            .length;
+    _rejectedCount =
+        issues
+            .where((issue) => issue.status.toLowerCase() == 'rejected')
+            .length;
+    _thisWeekCount =
+        issues.where((issue) => issue.createdAt.isAfter(weekAgo)).length;
+    _thisMonthCount =
+        issues.where((issue) => issue.createdAt.isAfter(monthAgo)).length;
+    _assignedToMeCount = assignedIssues.length;
+    _newTodayCount =
+        issues.where((issue) => issue.createdAt.isAfter(today)).length;
+
+    _urgentCount =
+        issues
+            .where(
+              (issue) =>
+                  (issue.priority.toLowerCase() == 'high' ||
+                      issue.priority.toLowerCase() == 'critical') &&
+                  issue.status.toLowerCase() == 'pending',
+            )
+            .length;
+
+    // Calculate overdue issues (pending for more than 3 days)
+    final threeDaysAgo = now.subtract(const Duration(days: 3));
+    _overdueCount =
+        issues
+            .where(
+              (issue) =>
+                  issue.status.toLowerCase() == 'pending' &&
+                  issue.createdAt.isBefore(threeDaysAgo),
+            )
+            .length;
+  }
+
+  void _calculatePerformanceMetrics(List<IssueModel> issues) {
+    final resolvedIssues =
+        issues
+            .where((issue) => issue.status.toLowerCase() == 'resolved')
+            .toList();
+
+    if (resolvedIssues.isNotEmpty) {
+      final totalHours = resolvedIssues.fold<double>(0, (sum, issue) {
+        if (issue.updatedAt != null) {
+          return sum +
+              issue.updatedAt!.difference(issue.createdAt).inHours.toDouble();
+        }
+        return sum;
+      });
+      _averageResolutionTime = totalHours / resolvedIssues.length;
+      _resolutionRate = (resolvedIssues.length / _totalIssues) * 100;
+    } else {
+      _averageResolutionTime = 0.0;
+      _resolutionRate = 0.0;
+    }
+  }
+
+  List<IssueModel> get _filteredIssues {
+    switch (_selectedTab) {
+      case 'pending':
+        return _departmentIssues
+            .where((issue) => issue.status.toLowerCase() == 'pending')
+            .toList();
+      case 'urgent':
+        return _departmentIssues
+            .where(
+              (issue) =>
+                  (issue.priority.toLowerCase() == 'high' ||
+                      issue.priority.toLowerCase() == 'critical') &&
+                  issue.status.toLowerCase() == 'pending',
+            )
+            .toList();
+      case 'assigned':
+        return _departmentIssues
+            .where((issue) => issue.assignedTo == _userData?.uid)
+            .toList();
+      case 'in_progress':
+        return _departmentIssues
+            .where((issue) => issue.status.toLowerCase() == 'in_progress')
+            .toList();
+      case 'resolved':
+        return _departmentIssues
+            .where((issue) => issue.status.toLowerCase() == 'resolved')
+            .toList();
+      case 'overdue':
+        final threeDaysAgo = DateTime.now().subtract(const Duration(days: 3));
+        return _departmentIssues
+            .where(
+              (issue) =>
+                  issue.status.toLowerCase() == 'pending' &&
+                  issue.createdAt.isBefore(threeDaysAgo),
+            )
+            .toList();
+      case 'new_today':
+        final today = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+        );
+        return _departmentIssues
+            .where((issue) => issue.createdAt.isAfter(today))
+            .toList();
+      default:
+        return _departmentIssues;
     }
   }
 
@@ -144,7 +323,556 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     await _loadData();
   }
 
-  // Issue service methods (existing)
+  Future<void> _signOut() async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (context) => const Center(
+              child: ModernCard(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Signing out...'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+      );
+
+      await _authService.signOut();
+      Navigator.of(context).pop();
+      Navigator.pushReplacementNamed(context, '/login');
+    } catch (e) {
+      Navigator.of(context).pop();
+      _showErrorSnackBar('Sign out failed: $e');
+    }
+  }
+
+  void _showManagementOptions() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (modalContext) => ManagementOptionsModal(
+            userData: _userData,
+            departmentIssues: _departmentIssues,
+            onRefresh: _loadData,
+            parentContext: context,
+          ),
+    );
+  }
+
+  void _showAnalytics() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AnalyticsModal(
+            userData: _userData,
+            totalIssues: _totalIssues,
+            resolutionRate: _resolutionRate,
+            averageResolutionTime: _averageResolutionTime,
+            thisMonthCount: _thisMonthCount,
+            pendingCount: _pendingCount,
+            inProgressCount: _inProgressCount,
+            resolvedCount: _resolvedCount,
+            rejectedCount: _rejectedCount,
+            urgentCount: _urgentCount,
+            assignedToMeCount: _assignedToMeCount,
+            thisWeekCount: _thisWeekCount,
+          ),
+    );
+  }
+
+  // Enhanced Priority-Based Triage Section
+  Widget _buildPriorityTriageSection() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Issue Triage Center',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: ModernTheme.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  gradient: ModernTheme.successGradient,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Live Updates',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Priority Grid
+          GridView.count(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1.2,
+            children: [
+              _buildTriageCard(
+                'Urgent Queue',
+                _urgentCount,
+                Icons.priority_high,
+                ModernTheme.errorGradient,
+                'urgent',
+                'Critical & High priority',
+              ),
+              _buildTriageCard(
+                'New Today',
+                _newTodayCount,
+                Icons.fiber_new,
+                ModernTheme.primaryGradient,
+                'new_today',
+                'Reported today',
+              ),
+              _buildTriageCard(
+                'Assigned to Me',
+                _assignedToMeCount,
+                Icons.assignment_ind,
+                ModernTheme.accentGradient,
+                'assigned',
+                'Your active tasks',
+              ),
+              _buildTriageCard(
+                'Overdue',
+                _overdueCount,
+                Icons.schedule,
+                ModernTheme.warningGradient,
+                'overdue',
+                'Pending > 3 days',
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // Quick Status Overview
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickStatCard(
+                  'In Progress',
+                  _inProgressCount,
+                  ModernTheme.accent,
+                  'in_progress',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickStatCard(
+                  'Resolved',
+                  _resolvedCount,
+                  ModernTheme.success,
+                  'resolved',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickStatCard(
+                  'Pending',
+                  _pendingCount,
+                  ModernTheme.warning,
+                  'pending',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTriageCard(
+    String title,
+    int count,
+    IconData icon,
+    LinearGradient gradient,
+    String filterKey,
+    String subtitle,
+  ) {
+    final isSelected = _selectedTab == filterKey;
+    final isUrgent = filterKey == 'urgent' && count > 0;
+
+    return ScaleTransition(
+      scale: isUrgent ? _pulseAnimation : const AlwaysStoppedAnimation(1.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _selectedTab = filterKey),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: gradient.colors.first.withOpacity(
+                    isSelected ? 0.6 : 0.3,
+                  ),
+                  blurRadius: isSelected ? 20 : 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border:
+                  isSelected
+                      ? Border.all(
+                        color: Colors.white.withOpacity(0.5),
+                        width: 2,
+                      )
+                      : null,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 20),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          count.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 11,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickStatCard(
+    String title,
+    int count,
+    Color color,
+    String filterKey,
+  ) {
+    final isSelected = _selectedTab == filterKey;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => _selectedTab = filterKey),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withOpacity(0.2) : color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : color.withOpacity(0.3),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                count.toString(),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Enhanced Notification Center
+  Widget _buildNotificationCenter() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: ModernCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.accentGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_active,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Text(
+                    'Citizen Communications',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: ModernTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                StreamBuilder<List<NotificationModel>>(
+                  stream: NotificationService().getUserNotificationsStream(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const SizedBox.shrink();
+
+                    final unreadCount =
+                        snapshot.data!.where((n) => !n.isRead).length;
+                    if (unreadCount == 0) return const SizedBox.shrink();
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: ModernTheme.error,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _openDepartmentNotifications,
+                  child: const Text('View All'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            StreamBuilder<List<NotificationModel>>(
+              stream: NotificationService().getUserNotificationsStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Text(
+                    'No citizen communications yet',
+                    style: TextStyle(color: ModernTheme.textSecondary),
+                  );
+                }
+
+                final departmentNotifications =
+                    snapshot.data!
+                        .where(
+                          (notification) =>
+                              notification.type == 'citizen_manual_reminder' ||
+                              notification.type == 'citizen_followup' ||
+                              notification.type == 'department_reminder',
+                        )
+                        .take(3)
+                        .toList();
+
+                if (departmentNotifications.isEmpty) {
+                  return const Text(
+                    'No recent communications from citizens',
+                    style: TextStyle(color: ModernTheme.textSecondary),
+                  );
+                }
+
+                return Column(
+                  children:
+                      departmentNotifications
+                          .map(
+                            (notification) =>
+                                _buildQuickNotificationItem(notification),
+                          )
+                          .toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickNotificationItem(NotificationModel notification) {
+    final canReply = notification.data['canReply'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color:
+            notification.isRead
+                ? ModernTheme.surfaceVariant
+                : ModernTheme.primaryBlue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color:
+              notification.isRead
+                  ? ModernTheme.textTertiary.withOpacity(0.2)
+                  : ModernTheme.primaryBlue.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                _getNotificationTypeIcon(notification.type),
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  notification.title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight:
+                        notification.isRead ? FontWeight.w500 : FontWeight.bold,
+                    color: ModernTheme.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                notification.timeAgo,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: ModernTheme.textTertiary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            notification.body,
+            style: const TextStyle(
+              fontSize: 13,
+              color: ModernTheme.textSecondary,
+              height: 1.3,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (canReply) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => _showQuickReplyDialog(notification),
+                  icon: const Icon(Icons.reply, size: 16),
+                  label: const Text('Quick Reply'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: ModernTheme.primaryBlue,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Helper methods and issue service methods remain the same...
   Future<List<IssueModel>> _getIssuesByDepartment(String department) async {
     try {
       final querySnapshot =
@@ -181,823 +909,698 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     }
   }
 
-  void _subscribeToRealTimeUpdates() {
-    if (_userData?.department == null) return;
-
-    _issuesSubscription?.cancel();
-    _issuesSubscription = FirebaseFirestore.instance
-        .collection('issues')
-        .where('category', isEqualTo: _userData!.department!)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-          if (mounted) {
-            _processRealTimeUpdate(snapshot);
-          }
-        });
+  void _openDepartmentNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const DepartmentNotificationsScreen(),
+      ),
+    );
   }
 
-  void _processRealTimeUpdate(QuerySnapshot snapshot) {
-    final issues =
-        snapshot.docs.map((doc) => IssueModel.fromFirestore(doc)).toList();
+  void _showQuickReplyDialog(NotificationModel notification) {
+    final messageController = TextEditingController();
+    final issueTitle = notification.data['issueTitle'] ?? 'Issue';
+    final citizenName =
+        notification.data['citizenName'] ??
+        notification.data['senderName'] ??
+        'Citizen';
 
-    setState(() {
-      _departmentIssues = issues;
-    });
-
-    _getAssignedIssues(_userData?.uid ?? '').then((assignedIssues) {
-      _calculateStatistics(issues, assignedIssues);
-      _calculatePerformanceMetrics(issues);
-      setState(() {});
-    });
-  }
-
-  void _calculateStatistics(
-    List<IssueModel> issues,
-    List<IssueModel> assignedIssues,
-  ) {
-    final now = DateTime.now();
-    final weekAgo = now.subtract(const Duration(days: 7));
-    final monthAgo = now.subtract(const Duration(days: 30));
-
-    _totalIssues = issues.length;
-    _pendingCount =
-        issues.where((issue) => issue.status.toLowerCase() == 'pending').length;
-    _inProgressCount =
-        issues
-            .where((issue) => issue.status.toLowerCase() == 'in_progress')
-            .length;
-    _resolvedCount =
-        issues
-            .where((issue) => issue.status.toLowerCase() == 'resolved')
-            .length;
-    _rejectedCount =
-        issues
-            .where((issue) => issue.status.toLowerCase() == 'rejected')
-            .length;
-    _thisWeekCount =
-        issues.where((issue) => issue.createdAt.isAfter(weekAgo)).length;
-    _thisMonthCount =
-        issues.where((issue) => issue.createdAt.isAfter(monthAgo)).length;
-    _assignedToMeCount = assignedIssues.length;
-
-    _urgentCount =
-        issues
-            .where(
-              (issue) =>
-                  (issue.priority.toLowerCase() == 'high' ||
-                      issue.priority.toLowerCase() == 'critical') &&
-                  issue.status.toLowerCase() == 'pending',
-            )
-            .length;
-  }
-
-  void _calculatePerformanceMetrics(List<IssueModel> issues) {
-    final resolvedIssues =
-        issues
-            .where((issue) => issue.status.toLowerCase() == 'resolved')
-            .toList();
-
-    if (resolvedIssues.isNotEmpty) {
-      final totalHours = resolvedIssues.fold<double>(0, (sum, issue) {
-        if (issue.updatedAt != null) {
-          return sum +
-              issue.updatedAt!.difference(issue.createdAt).inHours.toDouble();
-        }
-        return sum;
-      });
-      _averageResolutionTime = totalHours / resolvedIssues.length;
-      _resolutionRate = (resolvedIssues.length / _totalIssues) * 100;
-    } else {
-      _averageResolutionTime = 0.0;
-      _resolutionRate = 0.0;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return _buildLoadingScreen();
-    }
-
-    return Scaffold(
-      backgroundColor: ModernTheme.background,
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: RefreshIndicator(
-            onRefresh: _refreshData,
-            color: ModernTheme.primaryBlue,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                // Professional Header
-                _buildProfessionalHeader(),
-
-                // Statistics Cards
-                _buildStatisticsCards(),
-
-                // Filter Tabs
-                _buildFilterTabs(),
-
-                // Issues List
-                _buildIssuesList(),
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.reply, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Quick Reply')),
               ],
             ),
-          ),
-        ),
-      ),
-      floatingActionButton: _buildFloatingActionButton(),
-    );
-  }
-
-  Widget _buildLoadingScreen() {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
-              SizedBox(height: 24),
-              Text(
-                'Loading Dashboard...',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Please wait while we fetch your department data',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfessionalHeader() {
-    return SliverToBoxAdapter(
-      child: Container(
-        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.dashboard,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Department Dashboard',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          _userData?.department ?? 'Loading...',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _showAnalytics,
-                    icon: const Icon(Icons.analytics, color: Colors.white),
-                  ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert, color: Colors.white),
-                    onSelected: _handleMenuSelection,
-                    itemBuilder:
-                        (context) => [
-                          const PopupMenuItem(
-                            value: 'notifications',
-                            child: Row(
-                              children: [
-                                Icon(Icons.notifications),
-                                SizedBox(width: 8),
-                                Text('Notifications'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'settings',
-                            child: Row(
-                              children: [
-                                Icon(Icons.settings),
-                                SizedBox(width: 8),
-                                Text('Settings'),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'logout',
-                            child: Row(
-                              children: [
-                                Icon(Icons.logout),
-                                SizedBox(width: 8),
-                                Text('Sign Out'),
-                              ],
-                            ),
-                          ),
-                        ],
-                  ),
-                ],
-              ),
-              if (_urgentCount > 0) ...[
-                const SizedBox(height: 16),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.red.withOpacity(0.3),
-                      width: 1,
-                    ),
+                    color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.priority_high,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
                       Text(
-                        '$_urgentCount urgent issues require immediate attention',
+                        'Reply to: $citizenName',
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: ModernTheme.primaryBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Regarding: $issueTitle',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: ModernTheme.textSecondary,
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: messageController,
+                  decoration: const InputDecoration(
+                    labelText: 'Your Reply',
+                    hintText: 'Type your response...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
               ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  if (messageController.text.trim().isNotEmpty) {
+                    try {
+                      await NotificationService().sendDepartmentReplyToCitizen(
+                        issueId: notification.data['issueId'] ?? '',
+                        citizenId:
+                            notification.data['citizenId'] ??
+                            notification.data['senderId'] ??
+                            '',
+                        replyMessage: messageController.text.trim(),
+                        officialName:
+                            _userData?.fullName ?? 'Department Official',
+                        department: _userData?.department ?? 'Department',
+                        originalNotificationId: notification.id,
+                      );
+
+                      Navigator.pop(context);
+                      _showSuccessSnackBar('Reply sent to citizen!');
+
+                      // Mark the original notification as read
+                      await NotificationService().markAsRead(notification.id);
+                    } catch (e) {
+                      _showErrorSnackBar('Failed to send reply: $e');
+                    }
+                  }
+                },
+                icon: const Icon(Icons.send),
+                label: const Text('Send Reply'),
+              ),
             ],
+          ),
+    );
+  }
+
+  String _getNotificationTypeIcon(String type) {
+    switch (type) {
+      case 'citizen_manual_reminder':
+        return '🔔';
+      case 'citizen_followup':
+        return '💬';
+      case 'department_reminder':
+        return '⏰';
+      default:
+        return '📢';
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: ModernTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 12),
+            Text(message),
+          ],
+        ),
+        backgroundColor: ModernTheme.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: ModernTheme.primaryGradient,
+          ),
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                SizedBox(height: 24),
+                Text(
+                  'Loading Department Dashboard...',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Fetching live issue data and notifications',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: RefreshIndicator(
+              onRefresh: _refreshData,
+              color: ModernTheme.primaryBlue,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  // Header
+                  SliverToBoxAdapter(
+                    child: DepartmentHeader(
+                      userData: _userData,
+                      urgentCount: _urgentCount,
+                      isRefreshing: _isRefreshing,
+                      refreshAnimation: _refreshAnimation,
+                      onSignOut: _signOut,
+                      onShowAnalytics: _showAnalytics,
+                    ),
+                  ),
+
+                  // Main content with rounded top
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 16),
+                      decoration: const BoxDecoration(
+                        color: ModernTheme.background,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(32),
+                          topRight: Radius.circular(32),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Enhanced Priority-Based Triage Section
+                          _buildPriorityTriageSection(),
+
+                          // Performance Metrics
+                          PerformanceMetrics(
+                            resolutionRate: _resolutionRate,
+                            averageResolutionTime: _averageResolutionTime,
+                            assignedToMeCount: _assignedToMeCount,
+                          ),
+
+                          // Enhanced Notification Center
+                          _buildNotificationCenter(),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Issues list
+                  _buildIssuesSliver(),
+                ],
+              ),
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildStatisticsCards() {
-    return SliverToBoxAdapter(
-      child: Container(
-        margin: const EdgeInsets.all(16),
-        child: GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 1.2,
-          children: [
-            _buildStatCard(
-              'Total Issues',
-              _totalIssues.toString(),
-              Icons.assignment,
-              ModernTheme.primaryBlue,
-              '+$_thisWeekCount this week',
-            ),
-            _buildStatCard(
-              'Pending',
-              _pendingCount.toString(),
-              Icons.pending,
-              Colors.orange,
-              'Requires attention',
-            ),
-            _buildStatCard(
-              'In Progress',
-              _inProgressCount.toString(),
-              Icons.work,
-              ModernTheme.secondary,
-              'Being processed',
-            ),
-            _buildStatCard(
-              'Resolved',
-              _resolvedCount.toString(),
-              Icons.check_circle,
-              Colors.green,
-              '${_resolutionRate.toStringAsFixed(1)}% rate',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-    String subtitle,
-  ) {
-    return Container(
-      height: 140, // Fixed height to prevent overflow
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: "refresh",
+            onPressed: _refreshData,
+            backgroundColor: ModernTheme.accent,
+            child: const Icon(Icons.refresh),
+          ),
+          const SizedBox(height: 16),
+          FloatingActionButton.extended(
+            heroTag: "manage",
+            onPressed: _showManagementOptions,
+            icon: const Icon(Icons.admin_panel_settings),
+            label: const Text('Manage'),
+            backgroundColor: ModernTheme.primaryBlue,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildIssuesSliver() {
+    final filteredIssues = _filteredIssues;
+
+    if (filteredIssues.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Container(
+          height: 400,
+          color: ModernTheme.background,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: ModernTheme.accentGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _getEmptyStateIcon(_selectedTab),
+                    size: 48,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  _getEmptyStateTitle(_selectedTab),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: ModernTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _getEmptyStateSubtitle(_selectedTab),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: ModernTheme.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        if (index == 0) {
+          return Container(
+            color: ModernTheme.background,
+            child: Padding(
+              padding: const EdgeInsets.only(
+                top: 8,
+                left: 24,
+                right: 24,
+                bottom: 8,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_getFilterDisplayName(_selectedTab)} (${filteredIssues.length})',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: ModernTheme.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildEnhancedIssueCard(filteredIssues[index], index),
+                ],
+              ),
+            ),
+          );
+        } else if (index == filteredIssues.length - 1) {
+          return Container(
+            color: ModernTheme.background,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 24, right: 24, bottom: 120),
+              child: _buildEnhancedIssueCard(filteredIssues[index], index),
+            ),
+          );
+        } else {
+          return Container(
+            color: ModernTheme.background,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: _buildEnhancedIssueCard(filteredIssues[index], index),
+            ),
+          );
+        }
+      }, childCount: filteredIssues.length),
+    );
+  }
+
+  Widget _buildEnhancedIssueCard(IssueModel issue, int index) {
+    final statusColor = _getStatusColor(issue.status);
+    final priorityColor = _getPriorityColor(issue.priority);
+    final isUrgent =
+        issue.priority.toLowerCase() == 'high' ||
+        issue.priority.toLowerCase() == 'critical';
+    final isAssignedToMe = issue.assignedTo == _userData?.uid;
+    final isOverdue =
+        DateTime.now().difference(issue.createdAt).inDays > 3 &&
+        issue.status.toLowerCase() == 'pending';
+
+    return ModernCard(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OfficialIssueDetailScreen(issue: issue),
+          ),
+        ).then((_) => _loadData());
+      },
+      color:
+          isUrgent
+              ? ModernTheme.error.withOpacity(0.05)
+              : isOverdue
+              ? ModernTheme.warning.withOpacity(0.05)
+              : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Header with icon and badge
+          // Enhanced Header with more context
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  gradient:
+                      isUrgent
+                          ? ModernTheme.errorGradient
+                          : isOverdue
+                          ? ModernTheme.warningGradient
+                          : ModernTheme.primaryGradient,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 18),
+                child: Icon(
+                  isUrgent
+                      ? Icons.priority_high
+                      : isOverdue
+                      ? Icons.schedule
+                      : Icons.report_problem,
+                  size: 24,
+                  color: Colors.white,
+                ),
               ),
-              const Spacer(),
-              if (title == 'Total Issues' && _thisWeekCount > 0)
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            issue.title,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: ModernTheme.textPrimary,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isUrgent)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: ModernTheme.error,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'URGENT',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        if (isOverdue && !isUrgent)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: ModernTheme.warning,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'OVERDUE',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Text(
+                          'By ${issue.userName}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: ModernTheme.textSecondary,
+                          ),
+                        ),
+                        if (isAssignedToMe) ...[
+                          const Text(
+                            ' • ',
+                            style: TextStyle(color: ModernTheme.textSecondary),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: ModernTheme.primaryBlue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'ASSIGNED TO YOU',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: ModernTheme.primaryBlue,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  ModernStatusChip(
+                    text: _getStatusText(issue.status),
+                    color: statusColor,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: priorityColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      issue.priority,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Description
+          Text(
+            issue.description,
+            style: const TextStyle(
+              fontSize: 15,
+              color: ModernTheme.textSecondary,
+              height: 1.4,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+
+          const SizedBox(height: 16),
+
+          // Enhanced Footer with more information
+          Row(
+            children: [
+              Icon(
+                Icons.location_on,
+                size: 16,
+                color: ModernTheme.textSecondary,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  issue.address,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: ModernTheme.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (issue.imageUrls.isNotEmpty) ...[
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 6,
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
+                    color: ModernTheme.accent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text(
-                    '+$_thisWeekCount',
-                    style: const TextStyle(
-                      color: Colors.green,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.image, size: 12, color: ModernTheme.accent),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${issue.imageUrls.length}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: ModernTheme.accent,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ],
+              const SizedBox(width: 8),
+              Text(
+                _getTimeAgo(issue.createdAt),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: ModernTheme.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
 
-          // Main content
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: ModernTheme.textPrimary,
-                ),
+          // Admin notes preview
+          if (issue.adminNotes != null && issue.adminNotes!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: ModernTheme.accent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: ModernTheme.accent.withOpacity(0.2)),
               ),
-              const SizedBox(height: 2),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: ModernTheme.textPrimary,
-                ),
+              child: Row(
+                children: [
+                  Icon(Icons.note_alt, size: 16, color: ModernTheme.accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      issue.adminNotes!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: ModernTheme.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: ModernTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildFilterTabs() {
-    final tabs = [
-      {
-        'key': 'pending',
-        'label': 'Pending',
-        'count': _pendingCount,
-        'color': Colors.orange,
-        'icon': Icons.pending,
-      },
-      {
-        'key': 'in_progress',
-        'label': 'In Progress',
-        'count': _inProgressCount,
-        'color': ModernTheme.secondary,
-        'icon': Icons.work,
-      },
-      {
-        'key': 'resolved',
-        'label': 'Resolved',
-        'count': _resolvedCount,
-        'color': Colors.green,
-        'icon': Icons.check_circle,
-      },
-      {
-        'key': 'assigned_to_me',
-        'label': 'My Tasks',
-        'count': _assignedToMeCount,
-        'color': ModernTheme.primaryBlue,
-        'icon': Icons.person,
-      },
-    ];
-
-    return SliverToBoxAdapter(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        height: 60,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: tabs.length,
-          itemBuilder: (context, index) {
-            final tab = tabs[index];
-            final isSelected = _selectedTab == tab['key'];
-            final color = tab['color'] as Color;
-
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedTab = tab['key'] as String;
-                });
-              },
-              child: Container(
-                margin: const EdgeInsets.only(right: 12),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected ? color : Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(
-                    color: color.withOpacity(isSelected ? 1.0 : 0.3),
-                    width: 2,
-                  ),
-                  boxShadow:
-                      isSelected
-                          ? [
-                            BoxShadow(
-                              color: color.withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
-                            ),
-                          ]
-                          : null,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      tab['icon'] as IconData,
-                      color: isSelected ? Colors.white : color,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      tab['label'] as String,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : color,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color:
-                            isSelected
-                                ? Colors.white.withOpacity(0.3)
-                                : color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        (tab['count'] as int).toString(),
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIssuesList() {
-    final filteredIssues = _getFilteredIssues();
-
-    if (filteredIssues.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                Icons.inbox,
-                size: 64,
-                color: ModernTheme.textSecondary.withOpacity(0.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No ${_selectedTab.replaceAll('_', ' ')} issues',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: ModernTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'All caught up! New issues will appear here.',
-                style: TextStyle(color: ModernTheme.textSecondary),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return SliverPadding(
-      padding: const EdgeInsets.all(16),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate((context, index) {
-          final issue = filteredIssues[index];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: _buildIssueCard(issue),
-          );
-        }, childCount: filteredIssues.length),
-      ),
-    );
-  }
-
-  Widget _buildIssueCard(IssueModel issue) {
-    final statusColor = _getStatusColor(issue.status);
-    final priorityColor = _getPriorityColor(issue.priority);
-    final isAssignedToMe = issue.assignedTo == _userData?.employeeId;
-
-    return GestureDetector(
-      onTap: () => _navigateToIssueDetail(issue),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color:
-                isAssignedToMe
-                    ? ModernTheme.primaryBlue.withOpacity(0.3)
-                    : Colors.transparent,
-            width: 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: priorityColor,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    issue.priority,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: statusColor.withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    _getStatusText(issue.status),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                if (isAssignedToMe)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: ModernTheme.primaryBlue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'ASSIGNED TO YOU',
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: ModernTheme.primaryBlue,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                const SizedBox(width: 8),
-                Text(
-                  _formatTimeAgo(issue.createdAt),
-                  style: const TextStyle(
-                    color: ModernTheme.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              issue.title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: ModernTheme.textPrimary,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              issue.description,
-              style: const TextStyle(
-                color: ModernTheme.textSecondary,
-                fontSize: 14,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Icon(
-                  Icons.location_on,
-                  size: 16,
-                  color: ModernTheme.textSecondary,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    issue.address,
-                    style: const TextStyle(
-                      color: ModernTheme.textSecondary,
-                      fontSize: 12,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                const Icon(
-                  Icons.person,
-                  size: 16,
-                  color: ModernTheme.textSecondary,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  issue.userName,
-                  style: const TextStyle(
-                    color: ModernTheme.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFloatingActionButton() {
-    return FloatingActionButton.extended(
-      onPressed: _showManagementOptions,
-      backgroundColor: ModernTheme.secondary,
-      icon: const Icon(Icons.settings, color: Colors.white),
-      label: const Text(
-        'Manage',
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
   // Helper methods
-  List<IssueModel> _getFilteredIssues() {
-    switch (_selectedTab) {
-      case 'pending':
-        return _departmentIssues
-            .where((i) => i.status.toLowerCase() == 'pending')
-            .toList();
-      case 'in_progress':
-        return _departmentIssues
-            .where((i) => i.status.toLowerCase() == 'in_progress')
-            .toList();
-      case 'resolved':
-        return _departmentIssues
-            .where((i) => i.status.toLowerCase() == 'resolved')
-            .toList();
-      case 'assigned_to_me':
-        return _departmentIssues
-            .where((i) => i.assignedTo == _userData?.employeeId)
-            .toList();
-      default:
-        return _departmentIssues;
-    }
-  }
-
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return Colors.orange;
+        return ModernTheme.warning;
       case 'in_progress':
-        return ModernTheme.secondary;
+        return ModernTheme.accent;
       case 'resolved':
-        return Colors.green;
+        return ModernTheme.success;
       case 'rejected':
-        return Colors.red;
+        return ModernTheme.error;
       default:
         return ModernTheme.textSecondary;
     }
@@ -1005,14 +1608,14 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
 
   Color _getPriorityColor(String priority) {
     switch (priority.toLowerCase()) {
-      case 'critical':
-        return Colors.red;
-      case 'high':
-        return Colors.orange;
-      case 'medium':
-        return ModernTheme.primaryBlue;
       case 'low':
-        return Colors.green;
+        return ModernTheme.success;
+      case 'medium':
+        return ModernTheme.warning;
+      case 'high':
+        return ModernTheme.error;
+      case 'critical':
+        return const Color(0xFFDC2626);
       default:
         return ModernTheme.textSecondary;
     }
@@ -1021,19 +1624,103 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
   String _getStatusText(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return 'PENDING';
+        return 'Pending';
       case 'in_progress':
-        return 'IN PROGRESS';
+        return 'In Progress';
       case 'resolved':
-        return 'RESOLVED';
+        return 'Resolved';
       case 'rejected':
-        return 'REJECTED';
+        return 'Rejected';
       default:
-        return status.toUpperCase();
+        return status;
     }
   }
 
-  String _formatTimeAgo(DateTime dateTime) {
+  String _getFilterDisplayName(String filter) {
+    switch (filter) {
+      case 'urgent':
+        return 'Urgent Issues';
+      case 'new_today':
+        return 'New Today';
+      case 'assigned':
+        return 'Assigned to Me';
+      case 'overdue':
+        return 'Overdue Issues';
+      case 'in_progress':
+        return 'In Progress';
+      case 'resolved':
+        return 'Resolved Issues';
+      case 'pending':
+        return 'Pending Issues';
+      default:
+        return 'All Issues';
+    }
+  }
+
+  IconData _getEmptyStateIcon(String tab) {
+    switch (tab) {
+      case 'pending':
+        return Icons.pending_actions;
+      case 'urgent':
+        return Icons.priority_high;
+      case 'assigned':
+        return Icons.assignment_ind;
+      case 'in_progress':
+        return Icons.construction;
+      case 'resolved':
+        return Icons.check_circle_outline;
+      case 'overdue':
+        return Icons.schedule;
+      case 'new_today':
+        return Icons.fiber_new;
+      default:
+        return Icons.inbox_outlined;
+    }
+  }
+
+  String _getEmptyStateTitle(String tab) {
+    switch (tab) {
+      case 'pending':
+        return 'No Pending Issues';
+      case 'urgent':
+        return 'No Urgent Issues';
+      case 'assigned':
+        return 'No Assigned Issues';
+      case 'in_progress':
+        return 'No Issues In Progress';
+      case 'resolved':
+        return 'No Resolved Issues';
+      case 'overdue':
+        return 'No Overdue Issues';
+      case 'new_today':
+        return 'No New Issues Today';
+      default:
+        return 'No Issues Found';
+    }
+  }
+
+  String _getEmptyStateSubtitle(String tab) {
+    switch (tab) {
+      case 'pending':
+        return 'New issues will appear here when reported';
+      case 'urgent':
+        return 'High and critical priority issues will appear here';
+      case 'assigned':
+        return 'Issues assigned to you will appear here';
+      case 'in_progress':
+        return 'Issues being worked on will appear here';
+      case 'resolved':
+        return 'Completed issues will appear here';
+      case 'overdue':
+        return 'Issues pending for more than 3 days will appear here';
+      case 'new_today':
+        return 'Issues reported today will appear here';
+      default:
+        return 'Issues will appear here when available';
+    }
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
@@ -1046,211 +1733,5 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     } else {
       return 'Just now';
     }
-  }
-
-  void _navigateToIssueDetail(IssueModel issue) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => IssueDetailScreen(issue: issue)),
-    );
-  }
-
-  void _handleMenuSelection(String value) {
-    switch (value) {
-      case 'notifications':
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => DepartmentNotificationsScreen(),
-          ),
-        );
-        break;
-      case 'settings':
-        Navigator.pushNamed(context, '/official-settings');
-        break;
-      case 'logout':
-        _signOut();
-        break;
-    }
-  }
-
-  void _signOut() async {
-    try {
-      await _authService.signOut();
-      Navigator.of(context).pushReplacementNamed('/login');
-    } catch (e) {
-      _showErrorSnackBar('Failed to sign out');
-    }
-  }
-
-  void _showAnalytics() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Department Analytics'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Total Issues: $_totalIssues'),
-                const SizedBox(height: 8),
-                Text('Resolution Rate: ${_resolutionRate.toStringAsFixed(1)}%'),
-                const SizedBox(height: 8),
-                Text(
-                  'Average Resolution Time: ${_averageResolutionTime.toStringAsFixed(1)} hours',
-                ),
-                const SizedBox(height: 8),
-                Text('This Week: $_thisWeekCount new issues'),
-                const SizedBox(height: 8),
-                Text('This Month: $_thisMonthCount new issues'),
-                const SizedBox(height: 8),
-                Text('Assigned to You: $_assignedToMeCount issues'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  void _showManagementOptions() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder:
-          (context) => Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: ModernTheme.textSecondary.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Management Options',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: ModernTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.assignment_ind,
-                      color: ModernTheme.primaryBlue,
-                    ),
-                    title: const Text('Assign Issues'),
-                    subtitle: const Text('Assign issues to team members'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showAssignmentModal();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.update,
-                      color: ModernTheme.secondary,
-                    ),
-                    title: const Text('Bulk Update'),
-                    subtitle: const Text('Update multiple issues at once'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showBulkUpdateModal();
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.analytics, color: Colors.green),
-                    title: const Text('View Analytics'),
-                    subtitle: const Text('Department performance metrics'),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showAnalytics();
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-    );
-  }
-
-  void _showAssignmentModal() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Assign Issues'),
-            content: const Text(
-              'Assignment feature coming soon!\n\nThis will allow you to assign pending issues to specific team members.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  void _showBulkUpdateModal() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Bulk Update'),
-            content: const Text(
-              'Bulk update feature coming soon!\n\nThis will allow you to update status, priority, or assignments for multiple issues at once.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 }
