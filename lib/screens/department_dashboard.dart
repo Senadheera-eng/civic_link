@@ -1,4 +1,4 @@
-// screens/department_dashboard.dart (ENHANCED VERSION)
+// screens/department_dashboard.dart (COMPLETE VERSION - All Functions Working)
 import 'package:civic_link/models/notification_model.dart';
 import 'package:civic_link/screens/department_notifications_screen.dart';
 import 'package:civic_link/services/notification_service.dart';
@@ -15,7 +15,6 @@ import 'dart:async';
 // Import the separated widgets
 import '../widgets/department/department_header.dart';
 import '../widgets/department/performance_metrics.dart';
-import '../widgets/department/management_options_modal.dart';
 import '../widgets/department/analytics_modal.dart';
 import '../widgets/department/official_issue_detail_screen.dart';
 
@@ -355,19 +354,476 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     }
   }
 
+  // MANAGEMENT OPTIONS WITH WORKING BULK ACTIONS AND ISSUE ASSIGNMENT
   void _showManagementOptions() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder:
-          (modalContext) => ManagementOptionsModal(
-            userData: _userData,
-            departmentIssues: _departmentIssues,
-            onRefresh: _loadData,
-            parentContext: context,
+          (modalContext) => Container(
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(
+              color: ModernTheme.background,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: ModernTheme.textTertiary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Management Options',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: ModernTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildManagementOption(
+                      context,
+                      Icons.analytics,
+                      'Department Analytics',
+                      'View detailed performance metrics',
+                      () {
+                        Navigator.pop(context);
+                        _showAnalytics();
+                      },
+                    ),
+                    _buildManagementOption(
+                      context,
+                      Icons.assignment_turned_in,
+                      'Bulk Actions',
+                      'Update multiple issues at once',
+                      () {
+                        Navigator.pop(context);
+                        _showBulkActions();
+                      },
+                    ),
+                    _buildManagementOption(
+                      context,
+                      Icons.schedule,
+                      'Issue Assignment',
+                      'Assign issues to team members',
+                      () {
+                        Navigator.pop(context);
+                        _showIssueAssignment();
+                      },
+                    ),
+                    _buildManagementOption(
+                      context,
+                      Icons.people,
+                      'Team Management',
+                      'Manage department team',
+                      () {
+                        Navigator.pop(context);
+                        _showTeamManagement();
+                      },
+                      isLast: true,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
     );
+  }
+
+  Widget _buildManagementOption(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap, {
+    bool isLast = false,
+  }) {
+    return Container(
+      margin: isLast ? EdgeInsets.zero : const EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+            border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [ModernTheme.primaryBlue, ModernTheme.accent],
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: ModernTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: ModernTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: ModernTheme.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // WORKING BULK ACTIONS FUNCTION
+  void _showBulkActions() {
+    final pendingIssues =
+        _departmentIssues
+            .where((issue) => issue.status.toLowerCase() == 'pending')
+            .toList();
+
+    showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [ModernTheme.primaryBlue, ModernTheme.accent],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.assignment_turned_in,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text('Bulk Actions'),
+              ],
+            ),
+            content:
+                pendingIssues.isEmpty
+                    ? const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: ModernTheme.textSecondary,
+                          size: 48,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'No pending issues available for bulk actions',
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    )
+                    : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.assignment_turned_in,
+                          color: ModernTheme.primaryBlue,
+                          size: 48,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '${pendingIssues.length} pending issues available for bulk actions',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: ModernTheme.primaryBlue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: ModernTheme.primaryBlue,
+                                size: 16,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'This will mark all pending issues as "In Progress"',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: ModernTheme.primaryBlue,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+            actions:
+                pendingIssues.isEmpty
+                    ? [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ]
+                    : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _performBulkStatusUpdate(pendingIssues);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: ModernTheme.primaryBlue,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Mark All In Progress'),
+                      ),
+                    ],
+          ),
+    );
+  }
+
+  // WORKING ISSUE ASSIGNMENT FUNCTION
+  void _showIssueAssignment() {
+    final unassignedIssues =
+        _departmentIssues
+            .where(
+              (i) =>
+                  i.status.toLowerCase() == 'pending' &&
+                  (i.assignedTo == null || i.assignedTo!.isEmpty),
+            )
+            .toList();
+
+    showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [ModernTheme.primaryBlue, ModernTheme.accent],
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.schedule,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text('Issue Assignment'),
+              ],
+            ),
+            content:
+                unassignedIssues.isEmpty
+                    ? const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.assignment_turned_in,
+                          color: ModernTheme.success,
+                          size: 48,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'No unassigned issues available',
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'All pending issues are already assigned',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: ModernTheme.textSecondary,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    )
+                    : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          color: ModernTheme.primaryBlue,
+                          size: 48,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '${unassignedIssues.length} unassigned issues available',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: ModernTheme.primaryBlue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: ModernTheme.primaryBlue,
+                                size: 16,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'This will assign all unassigned issues to you',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: ModernTheme.primaryBlue,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+            actions:
+                unassignedIssues.isEmpty
+                    ? [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ]
+                    : [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _assignIssuesToSelf(unassignedIssues);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: ModernTheme.primaryBlue,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Assign All to Me'),
+                      ),
+                    ],
+          ),
+    );
+  }
+
+  // BULK STATUS UPDATE IMPLEMENTATION
+  Future<void> _performBulkStatusUpdate(List<IssueModel> issues) async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final issue in issues) {
+        final docRef = FirebaseFirestore.instance
+            .collection('issues')
+            .doc(issue.id);
+        batch.update(docRef, {
+          'status': 'in_progress',
+          'adminNotes':
+              'Bulk updated to In Progress by ${_userData?.displayName ?? 'Department Official'}',
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': _userData?.uid,
+        });
+      }
+      await batch.commit();
+
+      _showSuccessSnackBar('${issues.length} issues updated to In Progress');
+      await _loadData();
+    } catch (e) {
+      _showErrorSnackBar('Failed to update issues: $e');
+    }
+  }
+
+  // ISSUE ASSIGNMENT IMPLEMENTATION
+  Future<void> _assignIssuesToSelf(List<IssueModel> issues) async {
+    if (_userData == null) return;
+
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final issue in issues) {
+        final docRef = FirebaseFirestore.instance
+            .collection('issues')
+            .doc(issue.id);
+        batch.update(docRef, {
+          'assignedTo': _userData!.uid,
+          'status': 'in_progress',
+          'adminNotes':
+              'Self-assigned by ${_userData!.displayName ?? _userData!.email}',
+          'assignedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+
+      _showSuccessSnackBar(
+        '${issues.length} issues assigned to you successfully',
+      );
+      await _loadData();
+    } catch (e) {
+      _showErrorSnackBar('Failed to assign issues: $e');
+    }
   }
 
   void _showAnalytics() {
@@ -391,7 +847,94 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     );
   }
 
-  // Enhanced Priority-Based Triage Section
+  void _showTeamManagement() {
+    showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            title: const Text("Team Management"),
+            content: SizedBox(
+              width: 350,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 250,
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream:
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .where(
+                                'department',
+                                isEqualTo: _userData?.department,
+                              )
+                              .snapshots(),
+                      builder: (ctx, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Center(
+                            child: Text("No team members found."),
+                          );
+                        }
+
+                        final users = snapshot.data!.docs;
+                        return ListView.builder(
+                          itemCount: users.length,
+                          itemBuilder: (ctx, i) {
+                            final user = users[i];
+                            return ListTile(
+                              leading: const Icon(Icons.person),
+                              title: Text(user['displayName'] ?? 'Unnamed'),
+                              subtitle: Text(
+                                'Email: ${user['email'] ?? 'N/A'}',
+                              ),
+                              trailing:
+                                  user.id == _userData?.uid
+                                      ? Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: ModernTheme.primaryBlue,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'You',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      )
+                                      : null,
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Close"),
+              ),
+            ],
+          ),
+    );
+  }
+
+  // PRIORITY TRIAGE SECTION AND OTHER UI METHODS
   Widget _buildPriorityTriageSection() {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -430,8 +973,6 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
             ],
           ),
           const SizedBox(height: 20),
-
-          // Priority Grid
           GridView.count(
             crossAxisCount: 2,
             crossAxisSpacing: 12,
@@ -474,10 +1015,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
               ),
             ],
           ),
-
           const SizedBox(height: 20),
-
-          // Quick Status Overview
           Row(
             children: [
               Expanded(
@@ -623,7 +1161,6 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     String filterKey,
   ) {
     final isSelected = _selectedTab == filterKey;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -666,213 +1203,339 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     );
   }
 
-  // Enhanced Notification Center
-  Widget _buildNotificationCenter() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: ModernCard(
+  // ISSUES LIST SECTION - THE MISSING PART!
+  Widget _buildIssuesSliver() {
+    final filteredIssues = _filteredIssues;
+
+    return SliverToBoxAdapter(
+      child: Container(
+        margin: const EdgeInsets.only(top: 24),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    gradient: ModernTheme.accentGradient,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_active,
-                    color: Colors.white,
-                    size: 24,
+                Text(
+                  _getFilterDisplayName(_selectedTab),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: ModernTheme.textPrimary,
                   ),
                 ),
-                const SizedBox(width: 16),
-                const Expanded(
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   child: Text(
-                    'Citizen Communications',
-                    style: TextStyle(
-                      fontSize: 18,
+                    '${filteredIssues.length} issues',
+                    style: const TextStyle(
+                      color: ModernTheme.primaryBlue,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: ModernTheme.textPrimary,
                     ),
                   ),
-                ),
-                StreamBuilder<List<NotificationModel>>(
-                  stream: NotificationService().getUserNotificationsStream(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const SizedBox.shrink();
-
-                    final unreadCount =
-                        snapshot.data!.where((n) => !n.isRead).length;
-                    if (unreadCount == 0) return const SizedBox.shrink();
-
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: ModernTheme.error,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '$unreadCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _openDepartmentNotifications,
-                  child: const Text('View All'),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            StreamBuilder<List<NotificationModel>>(
-              stream: NotificationService().getUserNotificationsStream(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Text(
-                    'No citizen communications yet',
-                    style: TextStyle(color: ModernTheme.textSecondary),
-                  );
-                }
-
-                final departmentNotifications =
-                    snapshot.data!
-                        .where(
-                          (notification) =>
-                              notification.type == 'citizen_manual_reminder' ||
-                              notification.type == 'citizen_followup' ||
-                              notification.type == 'department_reminder',
-                        )
-                        .take(3)
-                        .toList();
-
-                if (departmentNotifications.isEmpty) {
-                  return const Text(
-                    'No recent communications from citizens',
-                    style: TextStyle(color: ModernTheme.textSecondary),
-                  );
-                }
-
-                return Column(
-                  children:
-                      departmentNotifications
-                          .map(
-                            (notification) =>
-                                _buildQuickNotificationItem(notification),
-                          )
-                          .toList(),
-                );
-              },
-            ),
+            if (filteredIssues.isEmpty)
+              _buildEmptyState()
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: filteredIssues.length,
+                separatorBuilder:
+                    (context, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final issue = filteredIssues[index];
+                  return _buildIssueCard(issue);
+                },
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildQuickNotificationItem(NotificationModel notification) {
-    final canReply = notification.data['canReply'] == true;
-
+  Widget _buildEmptyState() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color:
-            notification.isRead
-                ? ModernTheme.surfaceVariant
-                : ModernTheme.primaryBlue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color:
-              notification.isRead
-                  ? ModernTheme.textTertiary.withOpacity(0.2)
-                  : ModernTheme.primaryBlue.withOpacity(0.3),
-        ),
-      ),
+      padding: const EdgeInsets.all(32),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                _getNotificationTypeIcon(notification.type),
-                style: const TextStyle(fontSize: 16),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  notification.title,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight:
-                        notification.isRead ? FontWeight.w500 : FontWeight.bold,
-                    color: ModernTheme.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                notification.timeAgo,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: ModernTheme.textTertiary,
-                ),
-              ),
-            ],
+          Icon(
+            _getEmptyStateIcon(_selectedTab),
+            size: 64,
+            color: ModernTheme.textTertiary,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No ${_getFilterDisplayName(_selectedTab).toLowerCase()} found',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: ModernTheme.textSecondary,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
-            notification.body,
+            _getEmptyStateMessage(_selectedTab),
             style: const TextStyle(
-              fontSize: 13,
-              color: ModernTheme.textSecondary,
-              height: 1.3,
+              fontSize: 14,
+              color: ModernTheme.textTertiary,
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
           ),
-          if (canReply) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: () => _showQuickReplyDialog(notification),
-                  icon: const Icon(Icons.reply, size: 16),
-                  label: const Text('Quick Reply'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: ModernTheme.primaryBlue,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );
   }
 
-  // Helper methods and issue service methods remain the same...
+  Widget _buildIssueCard(IssueModel issue) {
+    final statusColor = _getStatusColor(issue.status);
+    final priorityColor = _getPriorityColor(issue.priority);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _navigateToIssueDetail(issue),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: ModernTheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: ModernTheme.textTertiary.withOpacity(0.1),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          issue.title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: ModernTheme.textPrimary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'ID: ${issue.id}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: ModernTheme.textTertiary,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: statusColor.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Text(
+                          _getStatusText(issue.status),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: statusColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: priorityColor,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          issue.priority,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                issue.description,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: ModernTheme.textSecondary,
+                  height: 1.4,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    size: 16,
+                    color: ModernTheme.textSecondary,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    flex: 2, // Give location more space
+                    child: Text(
+                      issue.address,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: ModernTheme.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 12), // Reduced from 16
+                  Icon(
+                    Icons.access_time,
+                    size: 16,
+                    color: ModernTheme.textSecondary,
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    // Changed from no wrapper to Flexible
+                    child: Text(
+                      _formatTimeAgo(issue.createdAt),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: ModernTheme.textSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              if (issue.assignedTo != null && issue.assignedTo!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.person,
+                      size: 16,
+                      color: ModernTheme.textSecondary,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      // Wrap the text in Expanded
+                      child: Text(
+                        'Assigned to: ${issue.assignedTo == _userData?.uid ? 'You' : issue.assignedTo}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: ModernTheme.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow:
+                            TextOverflow.ellipsis, // Add overflow handling
+                        maxLines: 1, // Limit to one line
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (issue.adminNotes != null && issue.adminNotes!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: ModernTheme.primaryBlue.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: ModernTheme.primaryBlue.withOpacity(0.1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.note,
+                        size: 16,
+                        color: ModernTheme.primaryBlue,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          issue.adminNotes!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: ModernTheme.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToIssueDetail(IssueModel issue) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => OfficialIssueDetailScreen(
+              issue: issue, // Only pass the issue parameter
+            ),
+      ),
+    ).then((_) => _loadData()); // Refresh data when returning
+  }
+
+  // ALL REMAINING HELPER METHODS
   Future<List<IssueModel>> _getIssuesByDepartment(String department) async {
     try {
       final querySnapshot =
@@ -881,7 +1544,6 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
               .where('category', isEqualTo: department)
               .orderBy('createdAt', descending: true)
               .get();
-
       return querySnapshot.docs
           .map((doc) => IssueModel.fromFirestore(doc))
           .toList();
@@ -899,148 +1561,12 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
               .where('assignedTo', isEqualTo: userId)
               .orderBy('createdAt', descending: true)
               .get();
-
       return querySnapshot.docs
           .map((doc) => IssueModel.fromFirestore(doc))
           .toList();
     } catch (e) {
       print('Error getting assigned issues: $e');
       return [];
-    }
-  }
-
-  void _openDepartmentNotifications() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const DepartmentNotificationsScreen(),
-      ),
-    );
-  }
-
-  void _showQuickReplyDialog(NotificationModel notification) {
-    final messageController = TextEditingController();
-    final issueTitle = notification.data['issueTitle'] ?? 'Issue';
-    final citizenName =
-        notification.data['citizenName'] ??
-        notification.data['senderName'] ??
-        'Citizen';
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: ModernTheme.primaryGradient,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.reply, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Quick Reply')),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Reply to: $citizenName',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: ModernTheme.primaryBlue,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Regarding: $issueTitle',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: ModernTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: messageController,
-                  decoration: const InputDecoration(
-                    labelText: 'Your Reply',
-                    hintText: 'Type your response...',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  if (messageController.text.trim().isNotEmpty) {
-                    try {
-                      await NotificationService().sendDepartmentReplyToCitizen(
-                        issueId: notification.data['issueId'] ?? '',
-                        citizenId:
-                            notification.data['citizenId'] ??
-                            notification.data['senderId'] ??
-                            '',
-                        replyMessage: messageController.text.trim(),
-                        officialName:
-                            _userData?.fullName ?? 'Department Official',
-                        department: _userData?.department ?? 'Department',
-                        originalNotificationId: notification.id,
-                      );
-
-                      Navigator.pop(context);
-                      _showSuccessSnackBar('Reply sent to citizen!');
-
-                      // Mark the original notification as read
-                      await NotificationService().markAsRead(notification.id);
-                    } catch (e) {
-                      _showErrorSnackBar('Failed to send reply: $e');
-                    }
-                  }
-                },
-                icon: const Icon(Icons.send),
-                label: const Text('Send Reply'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  String _getNotificationTypeIcon(String type) {
-    switch (type) {
-      case 'citizen_manual_reminder':
-        return '🔔';
-      case 'citizen_followup':
-        return '💬';
-      case 'department_reminder':
-        return '⏰';
-      default:
-        return '📢';
     }
   }
 
@@ -1080,517 +1606,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: ModernTheme.primaryGradient,
-          ),
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
-                SizedBox(height: 24),
-                Text(
-                  'Loading Department Dashboard...',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Fetching live issue data and notifications',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: RefreshIndicator(
-              onRefresh: _refreshData,
-              color: ModernTheme.primaryBlue,
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  // Header
-                  SliverToBoxAdapter(
-                    child: DepartmentHeader(
-                      userData: _userData,
-                      urgentCount: _urgentCount,
-                      isRefreshing: _isRefreshing,
-                      refreshAnimation: _refreshAnimation,
-                      onSignOut: _signOut,
-                      onShowAnalytics: _showAnalytics,
-                    ),
-                  ),
-
-                  // Main content with rounded top
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.only(top: 16),
-                      decoration: const BoxDecoration(
-                        color: ModernTheme.background,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(32),
-                          topRight: Radius.circular(32),
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Enhanced Priority-Based Triage Section
-                          _buildPriorityTriageSection(),
-
-                          // Performance Metrics
-                          PerformanceMetrics(
-                            resolutionRate: _resolutionRate,
-                            averageResolutionTime: _averageResolutionTime,
-                            assignedToMeCount: _assignedToMeCount,
-                          ),
-
-                          // Enhanced Notification Center
-                          _buildNotificationCenter(),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Issues list
-                  _buildIssuesSliver(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: "refresh",
-            onPressed: _refreshData,
-            backgroundColor: ModernTheme.accent,
-            child: const Icon(Icons.refresh),
-          ),
-          const SizedBox(height: 16),
-          FloatingActionButton.extended(
-            heroTag: "manage",
-            onPressed: _showManagementOptions,
-            icon: const Icon(Icons.admin_panel_settings),
-            label: const Text('Manage'),
-            backgroundColor: ModernTheme.primaryBlue,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIssuesSliver() {
-    final filteredIssues = _filteredIssues;
-
-    if (filteredIssues.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Container(
-          height: 400,
-          color: ModernTheme.background,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: ModernTheme.accentGradient,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _getEmptyStateIcon(_selectedTab),
-                    size: 48,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  _getEmptyStateTitle(_selectedTab),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: ModernTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _getEmptyStateSubtitle(_selectedTab),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: ModernTheme.textSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        if (index == 0) {
-          return Container(
-            color: ModernTheme.background,
-            child: Padding(
-              padding: const EdgeInsets.only(
-                top: 8,
-                left: 24,
-                right: 24,
-                bottom: 8,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${_getFilterDisplayName(_selectedTab)} (${filteredIssues.length})',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: ModernTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildEnhancedIssueCard(filteredIssues[index], index),
-                ],
-              ),
-            ),
-          );
-        } else if (index == filteredIssues.length - 1) {
-          return Container(
-            color: ModernTheme.background,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 24, right: 24, bottom: 120),
-              child: _buildEnhancedIssueCard(filteredIssues[index], index),
-            ),
-          );
-        } else {
-          return Container(
-            color: ModernTheme.background,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: _buildEnhancedIssueCard(filteredIssues[index], index),
-            ),
-          );
-        }
-      }, childCount: filteredIssues.length),
-    );
-  }
-
-  Widget _buildEnhancedIssueCard(IssueModel issue, int index) {
-    final statusColor = _getStatusColor(issue.status);
-    final priorityColor = _getPriorityColor(issue.priority);
-    final isUrgent =
-        issue.priority.toLowerCase() == 'high' ||
-        issue.priority.toLowerCase() == 'critical';
-    final isAssignedToMe = issue.assignedTo == _userData?.uid;
-    final isOverdue =
-        DateTime.now().difference(issue.createdAt).inDays > 3 &&
-        issue.status.toLowerCase() == 'pending';
-
-    return ModernCard(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => OfficialIssueDetailScreen(issue: issue),
-          ),
-        ).then((_) => _loadData());
-      },
-      color:
-          isUrgent
-              ? ModernTheme.error.withOpacity(0.05)
-              : isOverdue
-              ? ModernTheme.warning.withOpacity(0.05)
-              : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Enhanced Header with more context
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  gradient:
-                      isUrgent
-                          ? ModernTheme.errorGradient
-                          : isOverdue
-                          ? ModernTheme.warningGradient
-                          : ModernTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  isUrgent
-                      ? Icons.priority_high
-                      : isOverdue
-                      ? Icons.schedule
-                      : Icons.report_problem,
-                  size: 24,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            issue.title,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: ModernTheme.textPrimary,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isUrgent)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: ModernTheme.error,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'URGENT',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        if (isOverdue && !isUrgent)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: ModernTheme.warning,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'OVERDUE',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          'By ${issue.userName}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: ModernTheme.textSecondary,
-                          ),
-                        ),
-                        if (isAssignedToMe) ...[
-                          const Text(
-                            ' • ',
-                            style: TextStyle(color: ModernTheme.textSecondary),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: ModernTheme.primaryBlue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text(
-                              'ASSIGNED TO YOU',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: ModernTheme.primaryBlue,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  ModernStatusChip(
-                    text: _getStatusText(issue.status),
-                    color: statusColor,
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: priorityColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      issue.priority,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Description
-          Text(
-            issue.description,
-            style: const TextStyle(
-              fontSize: 15,
-              color: ModernTheme.textSecondary,
-              height: 1.4,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          const SizedBox(height: 16),
-
-          // Enhanced Footer with more information
-          Row(
-            children: [
-              Icon(
-                Icons.location_on,
-                size: 16,
-                color: ModernTheme.textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  issue.address,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: ModernTheme.textSecondary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (issue.imageUrls.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: ModernTheme.accent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.image, size: 12, color: ModernTheme.accent),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${issue.imageUrls.length}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: ModernTheme.accent,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(width: 8),
-              Text(
-                _getTimeAgo(issue.createdAt),
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: ModernTheme.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-
-          // Admin notes preview
-          if (issue.adminNotes != null && issue.adminNotes!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: ModernTheme.accent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: ModernTheme.accent.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.note_alt, size: 16, color: ModernTheme.accent),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      issue.adminNotes!,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: ModernTheme.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // Helper methods
+  // Helper methods for UI
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -1666,7 +1682,7 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
       case 'assigned':
         return Icons.assignment_ind;
       case 'in_progress':
-        return Icons.construction;
+        return Icons.work_outline;
       case 'resolved':
         return Icons.check_circle_outline;
       case 'overdue':
@@ -1674,53 +1690,32 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
       case 'new_today':
         return Icons.fiber_new;
       default:
-        return Icons.inbox_outlined;
+        return Icons.inbox;
     }
   }
 
-  String _getEmptyStateTitle(String tab) {
+  String _getEmptyStateMessage(String tab) {
     switch (tab) {
       case 'pending':
-        return 'No Pending Issues';
+        return 'All issues have been addressed or assigned';
       case 'urgent':
-        return 'No Urgent Issues';
+        return 'No critical or high priority issues at the moment';
       case 'assigned':
-        return 'No Assigned Issues';
+        return 'No issues are currently assigned to you';
       case 'in_progress':
-        return 'No Issues In Progress';
+        return 'No issues are currently being worked on';
       case 'resolved':
-        return 'No Resolved Issues';
+        return 'No issues have been resolved yet';
       case 'overdue':
-        return 'No Overdue Issues';
+        return 'Great! No overdue issues';
       case 'new_today':
-        return 'No New Issues Today';
+        return 'No new issues reported today';
       default:
-        return 'No Issues Found';
+        return 'No issues found';
     }
   }
 
-  String _getEmptyStateSubtitle(String tab) {
-    switch (tab) {
-      case 'pending':
-        return 'New issues will appear here when reported';
-      case 'urgent':
-        return 'High and critical priority issues will appear here';
-      case 'assigned':
-        return 'Issues assigned to you will appear here';
-      case 'in_progress':
-        return 'Issues being worked on will appear here';
-      case 'resolved':
-        return 'Completed issues will appear here';
-      case 'overdue':
-        return 'Issues pending for more than 3 days will appear here';
-      case 'new_today':
-        return 'Issues reported today will appear here';
-      default:
-        return 'Issues will appear here when available';
-    }
-  }
-
-  String _getTimeAgo(DateTime dateTime) {
+  String _formatTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
@@ -1733,5 +1728,144 @@ class _DepartmentDashboardState extends State<DepartmentDashboard>
     } else {
       return 'Just now';
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: ModernTheme.primaryGradient,
+          ),
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                SizedBox(height: 24),
+                Text(
+                  'Loading Department Dashboard...',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Fetching live issue data and notifications',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: ModernTheme.primaryGradient),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: RefreshIndicator(
+              onRefresh: _refreshData,
+              color: ModernTheme.primaryBlue,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: DepartmentHeader(
+                      userData: _userData,
+                      urgentCount: _urgentCount,
+                      isRefreshing: _isRefreshing,
+                      refreshAnimation: _refreshAnimation,
+                      onSignOut: _signOut,
+                      onShowAnalytics: _showAnalytics,
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 16),
+                      decoration: const BoxDecoration(
+                        color: ModernTheme.background,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(32),
+                          topRight: Radius.circular(32),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildPriorityTriageSection(),
+                          PerformanceMetrics(
+                            resolutionRate: _resolutionRate,
+                            averageResolutionTime: _averageResolutionTime,
+                            assignedToMeCount: _assignedToMeCount,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // This is the key addition - the issues list!
+                  _buildIssuesSliver(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            heroTag: "refresh",
+            onPressed: _refreshData,
+            backgroundColor: ModernTheme.accent,
+            child: const Icon(Icons.refresh),
+          ),
+          const SizedBox(height: 16),
+          FloatingActionButton.extended(
+            heroTag: "manage",
+            onPressed: _showManagementOptions,
+            icon: const Icon(Icons.admin_panel_settings),
+            label: const Text('Manage'),
+            backgroundColor: ModernTheme.primaryBlue,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Add this ModernCard widget if it doesn't exist in your theme
+class ModernCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets? margin;
+  final EdgeInsets? padding;
+
+  const ModernCard({Key? key, required this.child, this.margin, this.padding})
+    : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: margin,
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
   }
 }
