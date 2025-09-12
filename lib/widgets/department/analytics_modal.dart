@@ -1085,7 +1085,10 @@ class _AnalyticsModalState extends State<AnalyticsModal>
       crossAxisAlignment: CrossAxisAlignment.end,
       children:
           entries.map((entry) {
-            final height = maxCount > 0 ? (entry.value / maxCount) * 160 : 0.0;
+            final height =
+                maxCount > 0
+                    ? (entry.value / maxCount) * 157
+                    : 0.0; // Reduced from 160 to 157
             final month = entry.key.split('-')[1];
 
             return Expanded(
@@ -1116,7 +1119,7 @@ class _AnalyticsModalState extends State<AnalyticsModal>
                         );
                       },
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6), // Reduced from 8 to 6
                     Text(
                       month,
                       style: const TextStyle(
@@ -1125,6 +1128,9 @@ class _AnalyticsModalState extends State<AnalyticsModal>
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                    const SizedBox(
+                      height: 1,
+                    ), // Add small spacing between texts
                     Text(
                       '${entry.value}',
                       style: const TextStyle(
