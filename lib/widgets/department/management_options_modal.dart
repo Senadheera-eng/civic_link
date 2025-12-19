@@ -260,41 +260,41 @@ class ManagementOptionsModal extends StatelessWidget {
             .where((issue) => issue.status.toLowerCase() == 'pending')
             .toList();
 
-    if (pendingIssues.isEmpty) {
-      // Always use parentContext for snackbars
-      Future.delayed(Duration.zero, () {
-        _showErrorSnackBar(
-          parentContext,
-          'No pending issues available for bulk actions',
-        );
-      });
-      return;
-    }
-
     showDialog(
       context: context,
       builder:
           (_) => AlertDialog(
             title: const Text('Bulk Actions'),
-            content: Text('${pendingIssues.length} pending issues available'),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(parentContext).pop(); // Close dialog
-                  _performBulkStatusUpdate(
-                    context,
-                    pendingIssues.map((e) => e.id).toList(),
-                    'in_progress',
-                    'Bulk updated by ${userData?.shortDisplayName}',
-                  );
-                },
-                child: const Text('Mark All In Progress'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(parentContext).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
+            content:
+                pendingIssues.isEmpty
+                    ? const Text('No pending issues available for bulk actions')
+                    : Text('${pendingIssues.length} pending issues available'),
+            actions:
+                pendingIssues.isEmpty
+                    ? [
+                      TextButton(
+                        onPressed: () => Navigator.of(parentContext).pop(),
+                        child: const Text('Close'),
+                      ),
+                    ]
+                    : [
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(parentContext).pop(); // Close dialog
+                          _performBulkStatusUpdate(
+                            context,
+                            pendingIssues.map((e) => e.id).toList(),
+                            'in_progress',
+                            'Bulk updated by ${userData?.shortDisplayName}',
+                          );
+                        },
+                        child: const Text('Mark All In Progress'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(parentContext).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ],
           ),
     );
   }
@@ -310,33 +310,36 @@ class ManagementOptionsModal extends StatelessWidget {
             )
             .toList();
 
-    if (unassignedIssues.isEmpty) {
-      // Always use parentContext for snackbars
-      Future.delayed(Duration.zero, () {
-        _showErrorSnackBar(parentContext, 'No unassigned issues available');
-      });
-      return;
-    }
-
     showDialog(
       context: context,
       builder:
           (_) => AlertDialog(
             title: const Text('Issue Assignment'),
-            content: Text('${unassignedIssues.length} issues unassigned'),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(parentContext).pop();
-                  _assignIssuesToSelf(context, unassignedIssues);
-                },
-                child: const Text('Assign All to Me'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(parentContext).pop(),
-                child: const Text('Cancel'),
-              ),
-            ],
+            content:
+                unassignedIssues.isEmpty
+                    ? const Text('No unassigned issues available')
+                    : Text('${unassignedIssues.length} issues unassigned'),
+            actions:
+                unassignedIssues.isEmpty
+                    ? [
+                      TextButton(
+                        onPressed: () => Navigator.of(parentContext).pop(),
+                        child: const Text('Close'),
+                      ),
+                    ]
+                    : [
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(parentContext).pop(); // close dialog
+                          _assignIssuesToSelf(context, unassignedIssues);
+                        },
+                        child: const Text('Assign All to Me'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(parentContext).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ],
           ),
     );
   }
@@ -421,16 +424,24 @@ class ManagementOptionsModal extends StatelessWidget {
                         onPressed: () async {
                           if (controller.text.isNotEmpty) {
                             try {
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .add({
-                                    'displayName': controller.text.trim(),
-                                    'departmentId': userData?.department,
-                                    'role': 'member',
-                                    'email': '',
-                                    'createdAt': FieldValue.serverTimestamp(),
-                                  });
+                              final newMemberRef =
+                                  FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc();
+
+                              await newMemberRef.set({
+                                'displayName': controller.text.trim(),
+                                'departmentId': userData?.department,
+                                'role': 'member',
+                                'email': '',
+                                'uid': newMemberRef.id,
+                                'createdAt': FieldValue.serverTimestamp(),
+                              });
+
                               controller.clear();
+
+                              // ✅ Close the dialog before showing snackbar
+                              Navigator.of(parentContext).pop();
 
                               ScaffoldMessenger.of(parentContext).showSnackBar(
                                 const SnackBar(
@@ -438,6 +449,7 @@ class ManagementOptionsModal extends StatelessWidget {
                                 ),
                               );
                             } catch (e) {
+                              Navigator.of(parentContext).pop();
                               ScaffoldMessenger.of(parentContext).showSnackBar(
                                 SnackBar(
                                   content: Text("Failed to add member: $e"),
@@ -514,8 +526,9 @@ class ManagementOptionsModal extends StatelessWidget {
               'assignedAt': FieldValue.serverTimestamp(),
             });
       }
+
+      // ✅ removed the extra Navigator.pop
       _showSuccessSnackBar(parentContext, '${issues.length} issues assigned');
-      Navigator.of(parentContext).pop();
       onRefresh();
     } catch (e) {
       _showErrorSnackBar(parentContext, 'Failed: $e');
